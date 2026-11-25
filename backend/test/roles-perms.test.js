@@ -9,7 +9,7 @@ import {
 } from "vitest";
 import { createApp } from "../src/app.js";
 import { db } from "../src/db.js";
-import { PERMISSION_KEYS, keepsAdminRole } from "../src/permissions.js";
+import { PERMISSION_KEYS, activeAdminExists } from "../src/permissions.js";
 import {
   assertNoLeftovers,
   cleanupTestData,
@@ -97,82 +97,51 @@ describe("role permissions", () => {
   });
 });
 
-describe("safety rule: keep a role with roles.manage and users.edit", () => {
-  const roles = [
-    { id: 1, permissions: ["roles.manage", "users.edit"] },
-    { id: 2, permissions: ["users.view"] },
-    { id: 3, permissions: ["roles.manage"] },
-  ];
-
-  it("keepsAdminRole (pure logic)", () => {
-    expect(keepsAdminRole(roles, 1, null)).toBe(false);
-    expect(keepsAdminRole(roles, 1, ["roles.manage"])).toBe(false);
-    expect(keepsAdminRole(roles, 1, PERMISSION_KEYS)).toBe(true);
-    expect(keepsAdminRole(roles, 2, null)).toBe(true);
-    expect(keepsAdminRole(roles, 3, ["users.edit", "roles.manage"])).toBe(true);
-    expect(
-      keepsAdminRole(
-        [...roles, { id: 4, permissions: PERMISSION_KEYS }],
-        1,
-        null,
-      ),
-    ).toBe(true);
-  });
-
-  // Whether the real database already has an admin-capable role decides which branch of the
-  // API assertions applies, so both outcomes are asserted explicitly.
-  async function otherAdminRoleExists() {
-    const all = await Role.all();
-    return all.some(
-      (r) =>
-        r.id !== admin.role.id &&
-        !isMine(r) &&
-        ["roles.manage", "users.edit"].every((p) => r.permissions.includes(p)),
+describe("safety rule: keep an ACTIVE user in a role with roles.manage and users.edit", () => {
+  // Whether the user's real rows already contain an active administrator decides which branch of
+  // the API assertions applies, so both outcomes are asserted explicitly.
+  async function realActiveAdminExists() {
+    const [roles, users] = await Promise.all([Role.all(), User.all()]);
+    return activeAdminExists(
+      roles.filter((r) => !isMine(r)),
+      users.filter((u) => !isMine(u)),
     );
   }
+  const MESSAGE = "At least one role must keep roles.manage and users.edit";
+  const strip = (r) => ({ name: r.name, permissions: ["users.view"] });
 
-  it("removing the admin permissions from the last admin role -> 409 (allowed if another real admin role exists)", async () => {
-    const res = await admin.agent
-      .put(`/api/roles/${admin.role.id}`)
-      .send({ name: admin.role.name, permissions: ["users.view"] });
-    if (await otherAdminRoleExists()) {
+  it("removing the admin permissions from the only admin role -> 409 (allowed if a real active admin exists)", async () => {
+    const res = await admin.agent.put(`/api/roles/${admin.role.id}`).send(strip(admin.role));
+    if (await realActiveAdminExists()) {
       expect(res.status).toBe(200);
     } else {
       expect(res.status).toBe(409);
-      expect(res.body.error.message).toBe(
-        "At least one role must keep roles.manage and users.edit",
-      );
+      expect(res.body.error.message).toBe(MESSAGE);
     }
   });
 
-  it("a second admin-capable role makes the change allowed", async () => {
-    await Role.create({
-      name: testName("second-admin"),
-      permissions: ["roles.manage", "users.edit"],
-    });
-    const res = await admin.agent
-      .put(`/api/roles/${admin.role.id}`)
-      .send({ name: admin.role.name, permissions: ["users.view"] });
+  it("a second admin role with NO active user does not count (still 409 unless real admin)", async () => {
+    await Role.create({ name: testName("empty-admin"), permissions: ["roles.manage", "users.edit"] });
+    const res = await admin.agent.put(`/api/roles/${admin.role.id}`).send(strip(admin.role));
+    expect(res.status).toBe(await realActiveAdminExists() ? 200 : 409);
+  });
+
+  it("a second admin role WITH an active user makes the change allowed", async () => {
+    const second = await Role.create({ name: testName("second-admin"), permissions: ["roles.manage", "users.edit"] });
+    await User.create({ fullName: "S", email: testEmail("second"), roleId: second.id, isActive: true });
+    const res = await admin.agent.put(`/api/roles/${admin.role.id}`).send(strip(admin.role));
     expect(res.status).toBe(200);
   });
 
-  it("deleting the last admin-capable role -> 409 (allowed if another real admin role exists)", async () => {
-    const only = await Role.create({
-      name: testName("only-admin"),
-      permissions: ["roles.manage", "users.edit"],
-    });
-    // the signed-in actor role also holds both permissions, so strip users.edit from it first
-    await Role.where({ id: admin.role.id }).update({
-      permissions: ["roles.manage", "users.view"],
-    });
-    const res = await admin.agent.delete(`/api/roles/${only.id}`);
-    if (await otherAdminRoleExists()) {
-      expect(res.status).toBe(204);
-    } else {
-      expect(res.status).toBe(409);
-      expect(res.body.error.message).toBe(
-        "At least one role must keep roles.manage and users.edit",
-      );
-    }
+  it("an INACTIVE user in the second admin role does not count", async () => {
+    const second = await Role.create({ name: testName("second-admin"), permissions: ["roles.manage", "users.edit"] });
+    await User.create({ fullName: "S", email: testEmail("second"), roleId: second.id, isActive: false });
+    const res = await admin.agent.put(`/api/roles/${admin.role.id}`).send(strip(admin.role));
+    expect(res.status).toBe(await realActiveAdminExists() ? 200 : 409);
+  });
+
+  it("deleting an unused admin-capable role is allowed while an active admin remains", async () => {
+    const unused = await Role.create({ name: testName("unused-admin"), permissions: ["roles.manage", "users.edit"] });
+    expect((await admin.agent.delete(`/api/roles/${unused.id}`)).status).toBe(204);
   });
 });

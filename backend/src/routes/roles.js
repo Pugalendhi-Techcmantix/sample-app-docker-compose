@@ -1,8 +1,9 @@
 import { Router } from "express";
+import { assertAdminRemains, withAdminLock } from "../adminGuard.js";
 import { requirePermission } from "../auth.js";
+import { escapeLike } from "../like.js";
 import { db } from "../db.js";
 import { HttpError, mapPrismaError } from "../errors.js";
-import { keepsAdminRole } from "../permissions.js";
 import { parseBody, parseId, roleSchema } from "../validation.js";
 
 const Role = db.orm.public.Role;
@@ -10,10 +11,6 @@ const User = db.orm.public.User;
 const router = Router();
 
 const nameTaken = "Role name already exists";
-const lastAdmin = "At least one role must keep roles.manage and users.edit";
-
-// Escape LIKE wildcards so ilike behaves as a case-insensitive equality check.
-const escapeLike = (s) => s.replace(/[\\%_]/g, "\\$&");
 
 async function assertNameFree(name, exceptId) {
   const dup = await Role.where((r) => r.name.ilike(escapeLike(name))).first();
@@ -22,14 +19,6 @@ async function assertNameFree(name, exceptId) {
       { field: "name", message: nameTaken },
     ]);
   }
-}
-
-// Rejects a change (newPermissions) or delete (null) that would leave no role with
-// both roles.manage and users.edit, i.e. nobody could administer the system.
-async function assertKeepsAdminRole(roleId, newPermissions) {
-  const roles = await Role.select("id", "permissions").all();
-  if (!keepsAdminRole(roles, roleId, newPermissions))
-    throw new HttpError(409, lastAdmin);
 }
 
 // The lower(name) unique index is the race backstop for assertNameFree.
@@ -82,22 +71,32 @@ router.put("/:id", requirePermission("roles.manage"), async (req, res) => {
   const id = parseId(req.params.id);
   const data = parseBody(roleSchema, req.body);
   await assertNameFree(data.name, id);
-  await assertKeepsAdminRole(id, data.permissions);
-  const role = await write(() => Role.where({ id }).update(data));
+  // Check + write in one locked transaction, so two requests cannot both remove the last admin.
+  const role = await write(() =>
+    withAdminLock(async (tx) => {
+      await assertAdminRemains(tx, ({ roles, users }) => ({
+        roles: roles.map((x) => (x.id === id ? { ...x, permissions: data.permissions } : x)),
+        users,
+      }));
+      return tx.orm.public.Role.where({ id }).update(data);
+    }),
+  );
   if (!role) throw new HttpError(404, "Not found");
   res.json(toRoleDto(role, await countUsers(id)));
 });
 
 router.delete("/:id", requirePermission("roles.manage"), async (req, res) => {
   const id = parseId(req.params.id);
-  const n = await countUsers(id);
-  if (n > 0) throw new HttpError(409, `Role is assigned to ${n} user(s)`);
-  await assertKeepsAdminRole(id, null);
   let deleted;
   try {
-    deleted = await Role.where({ id }).delete();
+    deleted = await withAdminLock(async (tx) => {
+      const { n } = await tx.orm.public.User.where({ roleId: id }).aggregate((a) => ({ n: a.count() }));
+      if (n > 0) throw new HttpError(409, `Role is assigned to ${n} user(s)`);
+      await assertAdminRemains(tx, ({ roles, users }) => ({ roles: roles.filter((x) => x.id !== id), users }));
+      return tx.orm.public.Role.where({ id }).delete();
+    });
   } catch (err) {
-    // DB backstop (ON DELETE RESTRICT) if a user got this role since the count.
+    // DB backstop (ON DELETE RESTRICT) if a user got this role in the meantime.
     throw (
       mapPrismaError(err, {
         fk: { status: 409, message: "Role is assigned to one or more users" },

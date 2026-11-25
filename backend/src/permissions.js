@@ -26,10 +26,12 @@ export const ADMIN_PERMISSIONS = ["roles.manage", "users.edit"];
 
 export const holdsAdminPermissions = (permissions) => ADMIN_PERMISSIONS.every((p) => permissions.includes(p));
 
-// Would the system still have a role with roles.manage AND users.edit after this change?
-// roles: [{id, permissions}]; changedId: role being updated/deleted; newPermissions: null for delete.
-export function keepsAdminRole(roles, changedId, newPermissions) {
-  return roles.some((r) =>
-    r.id === changedId ? newPermissions !== null && holdsAdminPermissions(newPermissions) : holdsAdminPermissions(r.permissions),
-  );
+// True when every permission in `permissions` is also held by the caller.
+export const isSubset = (permissions, callerPermissions) => permissions.every((p) => callerPermissions.includes(p));
+
+// roles: [{id, permissions}], users: [{id, roleId, isActive}].
+// True when at least one ACTIVE user holds a role with roles.manage and users.edit.
+export function activeAdminExists(roles, users) {
+  const adminRoleIds = new Set(roles.filter((r) => holdsAdminPermissions(r.permissions)).map((r) => r.id));
+  return users.some((u) => u.isActive && adminRoleIds.has(u.roleId));
 }

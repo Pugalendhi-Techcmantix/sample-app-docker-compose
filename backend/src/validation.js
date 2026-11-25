@@ -62,6 +62,8 @@ export const userCreateSchema = z.object({ ...userFields, password: passwordSche
 // Update: password is optional; absent or empty keeps the current one.
 export const userUpdateSchema = z.object({
   ...userFields,
+  // omitted = keep the current value (create defaults to true)
+  isActive: z.boolean().optional(),
   password: z.preprocess((v) => (v === "" || v === null ? undefined : v), passwordSchema.optional()),
 });
 
