@@ -37,3 +37,36 @@ describe('api client', () => {
     expect(f.mock.calls[0][1].method).toBe('DELETE')
   })
 })
+
+describe('base URL', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  })
+
+  it('normalizes the configured value', async () => {
+    const { normalizeBase } = await import('./api.js')
+    expect(normalizeBase(undefined)).toBe('/api')
+    expect(normalizeBase('')).toBe('/api')
+    expect(normalizeBase('http://localhost:4000/api/')).toBe('http://localhost:4000/api')
+    expect(normalizeBase('/api')).toBe('/api')
+  })
+
+  it('defaults to /api', async () => {
+    vi.stubEnv('VITE_API_URL', '')
+    vi.resetModules()
+    const f = vi.fn().mockResolvedValue(json(200, []))
+    vi.stubGlobal('fetch', f)
+    await (await import('./api.js')).listRoles()
+    expect(f.mock.calls[0][0]).toBe('/api/roles')
+  })
+
+  it('uses VITE_API_URL without a trailing slash', async () => {
+    vi.stubEnv('VITE_API_URL', 'http://localhost:4000/api/')
+    vi.resetModules()
+    const f = vi.fn().mockResolvedValue(json(200, []))
+    vi.stubGlobal('fetch', f)
+    await (await import('./api.js')).listUsers()
+    expect(f.mock.calls[0][0]).toBe('http://localhost:4000/api/users')
+  })
+})
