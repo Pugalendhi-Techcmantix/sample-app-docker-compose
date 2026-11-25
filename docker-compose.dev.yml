@@ -7,9 +7,13 @@ services:
       context: ./backend
       target: dev
     command: ["npm", "run", "dev"]
+    ports:
+      - "4000:4000"
     environment:
       # backend/.env is bind-mounted too; pin the port so a local PORT there cannot leak in
       PORT: "4000"
+      # the browser talks to the API directly in dev; no proxy in front
+      TRUST_PROXY: "0"
       CORS_ORIGINS: http://localhost:5173,http://localhost:8080
     volumes:
       - ./backend:/app

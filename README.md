@@ -4,7 +4,8 @@ React (Vite) frontend, Express API, PostgreSQL. Data access uses Prisma ORM 8
 (contract-first: `backend/src/prisma/contract.prisma`, migrations in `backend/migrations/`).
 
 - Frontend: <http://localhost:5173> (dev) or <http://localhost:8080> (Docker)
-- API: `PORT` (default 4000), under `/api`
+- API: `PORT` (default 4000) under `/api` when run locally or in the Docker dev setup. In the production-like
+  Docker setup the API is **not published**: reach it only through the web container, `http://localhost:8080/api/...`
 
 ## 1. Run locally against your own PostgreSQL
 
@@ -86,7 +87,10 @@ docker compose down -v              # remove containers AND all data (then migra
 ```
 
 The compose `api` healthcheck uses `/api/live`, so the stack looks healthy before you migrate.
-The web container proxies `/api` to the api container, so no CORS is involved at port 8080.
+The web container proxies `/api` to the api container, so no CORS is involved at port 8080. The api container has no
+published port in this setup (so `localhost:4000` does not work here); call the API as `http://localhost:8080/api/...`.
+The api trusts one proxy hop (`TRUST_PROXY=1`) so login rate limiting sees the real client address. `docker compose exec`
+commands (migrate, seed) are unaffected.
 
 ## Docker: development (bind mounts, nodemon, hot reload)
 
@@ -104,7 +108,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml exec api npm run 
 ```
 
 - UI: <http://localhost:5173> (Vite dev server, calls the API at `http://localhost:4000/api`)
-- API: <http://localhost:4000>
+- API: <http://localhost:4000> (published only in the dev setup; `TRUST_PROXY=0` there)
 - Logs: `docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f api web`
 - Stop and remove containers (data kept): `docker compose -f docker-compose.yml -f docker-compose.dev.yml down`
 - Also wipe the database: add `-v` to the `down` command
@@ -169,9 +173,31 @@ Users that existed before this feature have no password and cannot sign in until
 one (edit the user and fill the password field).
 
 Login hardening: wrong email, wrong password, inactive user and a user without a password all give the
-same `401 Invalid email or password`; sign-in is limited to 10 attempts per minute per IP (429).
-Passwords are hashed with bcrypt (cost 12) and are 8 to 72 bytes long; the hash is never returned
-by any endpoint. Behind a reverse proxy all clients share the proxy IP for rate limiting.
+same `401 Invalid email or password`. Sign-in is limited to 10 attempts per minute per IP and 10 per 15
+minutes per email (429); changing a password is limited to 10 attempts per 15 minutes per user. Rate limits use the
+client IP, so behind a reverse proxy set `TRUST_PROXY` to the number of proxy hops (Docker production sets 1 and
+the nginx container must send `X-Forwarded-For: $remote_addr`); never set it when the API is directly reachable,
+because clients could then spoof the header. Passwords are hashed with bcrypt (cost 12) and are 8 to 72 bytes long;
+the hash is never returned by any endpoint. `JWT_SECRET` and `SEED_ADMIN_PASSWORD` have no default: the examples leave
+them empty and placeholders such as `change-me...`, `password`, `admin` or `12345678` are rejected.
+
+Privilege rules: you can only assign a role whose permissions are a subset of your own, you cannot edit, reset the
+password of or delete a user whose role has permissions you lack, and you cannot change your own role. The last
+active administrator (an active user in a role with both `roles.manage` and `users.edit`) cannot be deactivated,
+deleted, moved to another role, or have the role's permissions removed; these checks run in one database
+transaction under a lock, so concurrent requests cannot both remove the last administrator.
+
+### Known limits
+
+- Tokens are not revoked on logout, password change or password reset: a stolen token stays valid until it
+  expires (`JWT_EXPIRES_IN`, default 8h). Deactivating or deleting the user, or changing the role's permissions,
+  takes effect immediately because they are read from the database on every request.
+- `COOKIE_SECURE` defaults to `false` so plain-http local use works. Set it to `true` when the site is served over HTTPS.
+- Email uniqueness relies on emails being lower-cased when written (there is no case-insensitive database index on
+  `users.email`); role names do have a case-insensitive unique index.
+- Rate-limit counters are kept in memory (reset on restart, not shared between several API instances).
+- A user with `roles.manage` can edit their own role's permissions (this is how roles are managed); grant it only to
+  trusted administrators.
 
 Auth settings: `JWT_SECRET`, `JWT_EXPIRES_IN`, `COOKIE_SECURE`, `SEED_ADMIN_EMAIL`,
 `SEED_ADMIN_PASSWORD`, `LOGIN_RATE_LIMIT_DISABLED` (see the table below). The browser sends the cookie
@@ -188,6 +214,7 @@ API summary: `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`
 | `DATABASE_URL` | backend, prisma CLI | none (required) | PostgreSQL connection string. Docker: `postgres://postgres:password@db:5432/crud`; local backend: `postgres://postgres:password@localhost:5433/crud` (the Docker db) |
 | `PORT` | backend | `4000` | API listen port |
 | `CORS_ORIGINS` | backend | `http://localhost:5173,http://localhost:8080` | Comma-separated browser origins allowed to call the API |
+| `TRUST_PROXY` | backend | `0` | Reverse-proxy hops whose `X-Forwarded-For` is trusted (Docker production: `1`, dev: `0`) |
 | `JWT_SECRET` | backend | none (required) | 32+ char secret that signs login cookies; the API refuses to start without it |
 | `JWT_EXPIRES_IN` | backend | `8h` | Login session lifetime |
 | `COOKIE_SECURE` | backend | `false` | `true` adds the Secure flag to the cookie (use with HTTPS) |

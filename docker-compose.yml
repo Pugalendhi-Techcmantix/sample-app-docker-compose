@@ -17,8 +17,10 @@ services:
     env_file: .env
     environment:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:8080}
-    ports:
-      - "4000:4000"
+      # nginx (web) is the only client of the API: trust its X-Forwarded-For (1 hop).
+      TRUST_PROXY: "1"
+    # No published port: the browser reaches the API through nginx at http://localhost:8080/api.
+    # (Publishing 4000 would let clients spoof X-Forwarded-For past the login rate limit.)
     depends_on:
       db:
         condition: service_healthy
