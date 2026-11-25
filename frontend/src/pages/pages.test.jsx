@@ -1,7 +1,8 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
+import { mockApi, networkError } from '../test-utils.js'
 import RolesPage from './RolesPage.jsx'
 import UsersPage from './UsersPage.jsx'
 
@@ -10,14 +11,9 @@ beforeAll(() => {
   HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', '') }
   HTMLDialogElement.prototype.close = function () { this.removeAttribute('open') }
 })
-afterEach(() => vi.unstubAllGlobals())
 
-const res = (status, body) => ({ ok: status < 400, status, json: async () => body })
-const mockFetch = (handler) => {
-  const f = vi.fn(async (url, opts = {}) => handler(url, opts.method || 'GET', opts))
-  vi.stubGlobal('fetch', f)
-  return f
-}
+const res = (status, body) => ({ status, json: body })
+const mockFetch = mockApi
 const renderPage = (ui) => render(<MemoryRouter>{ui}</MemoryRouter>)
 
 const ROLES = [
@@ -48,7 +44,7 @@ describe('RolesPage', () => {
   })
 
   it('shows an error banner when the server is unreachable', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('x')))
+    mockFetch(networkError)
     renderPage(<RolesPage />)
     expect((await screen.findByRole('alert')).textContent).toContain('Cannot reach server')
   })
@@ -108,12 +104,12 @@ describe('UsersPage', () => {
     await user.selectOptions(screen.getByLabelText('Role *'), '1')
     await user.click(screen.getByRole('button', { name: 'Save' }))
     expect(await screen.findByText('Enter a valid email address')).toBeTruthy()
-    expect(f.mock.calls.some(([, o]) => o?.method === 'POST')).toBe(false)
+    expect(f.mock.calls.some(([, o]) => o.method === 'POST')).toBe(false)
     await user.clear(screen.getByLabelText('Email *'))
     await user.type(screen.getByLabelText('Email *'), 'asha@x.com')
     await user.click(screen.getByRole('button', { name: 'Save' }))
     expect(await screen.findByText('Email already exists')).toBeTruthy()
-    const post = f.mock.calls.find(([, o]) => o?.method === 'POST')
+    const post = f.mock.calls.find(([, o]) => o.method === 'POST')
     expect(JSON.parse(post[1].body)).toEqual({ fullName: 'Bob', email: 'asha@x.com', roleId: 1, isActive: true })
   })
 

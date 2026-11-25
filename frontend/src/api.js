@@ -1,3 +1,5 @@
+import axios from 'axios'
+
 export class ApiError extends Error {
   constructor(status, message, details) {
     super(message)
@@ -8,39 +10,30 @@ export class ApiError extends Error {
 }
 
 export const normalizeBase = (v) => (v || '/api').trim().replace(/\/+$/, '') || '/api'
-const BASE = normalizeBase(import.meta.env.VITE_API_URL)
 
-async function request(method, path, body) {
-  let res
-  try {
-    res = await fetch(`${BASE}${path}`, {
-      method,
-      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    })
-  } catch {
-    throw new ApiError(0, 'Cannot reach server')
-  }
-  if (res.status === 204) return null
-  let data = null
-  try {
-    data = await res.json()
-  } catch {
-    // non-JSON body (e.g. proxy error page)
-  }
-  if (!res.ok) {
-    const e = data?.error
-    throw new ApiError(res.status, e?.message || `Request failed (${res.status})`, e?.details)
-  }
-  return data
-}
+export const http = axios.create({
+  baseURL: normalizeBase(import.meta.env.VITE_API_URL),
+  headers: { 'Content-Type': 'application/json' },
+  timeout: 15000,
+})
+
+// Single place where transport/HTTP errors become ApiError.
+http.interceptors.response.use(
+  (res) => (res.status === 204 ? null : res.data),
+  (err) => {
+    const res = err.response
+    if (!res) return Promise.reject(new ApiError(0, 'Cannot reach server'))
+    const e = res.data?.error
+    return Promise.reject(new ApiError(res.status, e?.message || `Request failed (${res.status})`, e?.details))
+  },
+)
 
 const resource = (name) => ({
-  list: () => request('GET', `/${name}`),
-  get: (id) => request('GET', `/${name}/${id}`),
-  create: (data) => request('POST', `/${name}`, data),
-  update: (id, data) => request('PUT', `/${name}/${id}`, data),
-  remove: (id) => request('DELETE', `/${name}/${id}`),
+  list: () => http.get(`/${name}`),
+  get: (id) => http.get(`/${name}/${id}`),
+  create: (data) => http.post(`/${name}`, data),
+  update: (id, data) => http.put(`/${name}/${id}`, data),
+  remove: (id) => http.delete(`/${name}/${id}`),
 })
 
 const roles = resource('roles')
