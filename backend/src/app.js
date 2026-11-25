@@ -4,6 +4,8 @@ import express from "express";
 import { config } from "./config.js";
 import { db } from "./db.js";
 import { HttpError, errorHandler } from "./errors.js";
+import { requireAuth } from "./auth.js";
+import { PERMISSIONS } from "./permissions.js";
 import authRouter from "./routes/auth.js";
 import rolesRouter from "./routes/roles.js";
 import usersRouter from "./routes/users.js";
@@ -50,8 +52,9 @@ export function createApp({
     }
   });
   app.use("/api/auth", authRouter);
-  app.use("/api/roles", rolesRouter);
-  app.use("/api/users", usersRouter);
+  app.get("/api/permissions", requireAuth, (req, res) => res.json(PERMISSIONS));
+  app.use("/api/roles", requireAuth, rolesRouter);
+  app.use("/api/users", requireAuth, usersRouter);
   app.use((req, res, next) => next(new HttpError(404, "Not found")));
   app.use(errorHandler);
   return app;

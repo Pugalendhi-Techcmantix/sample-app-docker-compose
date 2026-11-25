@@ -1,4 +1,3 @@
-import request from "supertest";
 import {
   afterAll,
   afterEach,
@@ -10,19 +9,21 @@ import {
 } from "vitest";
 import { createApp } from "../src/app.js";
 import { db } from "../src/db.js";
+import { PERMISSION_KEYS } from "../src/permissions.js";
 import {
   assertNoLeftovers,
   cleanupTestData,
   isMine,
   testEmail,
-  testName,
-} from "./helpers.js";
+  testName, makeActor, TEST_PASSWORD } from "./helpers.js";
 
 const app = createApp();
 let role;
+let admin;
 
 beforeAll(cleanupTestData);
 beforeEach(async () => {
+  admin = await makeActor(app, { permissions: PERMISSION_KEYS });
   role = await db.orm.public.Role.create({ name: testName("Admin") });
 });
 afterEach(cleanupTestData);
@@ -33,12 +34,13 @@ afterAll(async () => {
 });
 
 const createUser = (body = {}) =>
-  request(app)
+  admin.agent
     .post("/api/users")
     .send({
       fullName: "Asha K",
       email: testEmail("Asha"),
       roleId: role.id,
+      password: TEST_PASSWORD,
       ...body,
     });
 
@@ -72,7 +74,7 @@ describe("users API", () => {
   });
 
   it("POST with missing / non-integer roleId -> 400 field roleId", async () => {
-    const res = await request(app)
+    const res = await admin.agent
       .post("/api/users")
       .send({ fullName: "A", email: testEmail("a") });
     expect(res.status).toBe(400);
@@ -94,18 +96,18 @@ describe("users API", () => {
   it("GET list includes roleName, sorted by fullName (own rows only)", async () => {
     await createUser({ fullName: "Zed", email: testEmail("z") });
     await createUser({ fullName: "Amy", email: testEmail("a") });
-    const res = await request(app).get("/api/users");
+    const res = await admin.agent.get("/api/users");
     expect(res.status).toBe(200);
-    const mine = res.body.filter(isMine);
+    const mine = res.body.filter((x) => isMine(x) && x.id !== admin.user.id);
     expect(mine.map((u) => u.fullName)).toEqual(["Amy", "Zed"]);
     expect(mine[0].roleName).toBe(testName("Admin"));
   });
 
   it("GET one -> 200; non-numeric or unknown id -> 404", async () => {
     const { body } = await createUser();
-    expect((await request(app).get(`/api/users/${body.id}`)).status).toBe(200);
+    expect((await admin.agent.get(`/api/users/${body.id}`)).status).toBe(200);
     for (const id of ["abc", "2147483647"]) {
-      const res = await request(app).get(`/api/users/${id}`);
+      const res = await admin.agent.get(`/api/users/${id}`);
       expect(res.status, id).toBe(404);
       expect(res.body).toEqual({ error: { message: "Not found" } });
     }
@@ -114,7 +116,7 @@ describe("users API", () => {
   it("PUT changes role and deactivates", async () => {
     const other = await db.orm.public.Role.create({ name: testName("Staff") });
     const { body } = await createUser();
-    const res = await request(app)
+    const res = await admin.agent
       .put(`/api/users/${body.id}`)
       .send({
         fullName: "Asha K",
@@ -139,17 +141,17 @@ describe("users API", () => {
       roleId: role.id,
     };
     expect(
-      (await request(app).put("/api/users/2147483647").send(ok)).status,
+      (await admin.agent.put("/api/users/2147483647").send(ok)).status,
     ).toBe(404);
-    expect((await request(app).put("/api/users/abc").send(ok)).status).toBe(
+    expect((await admin.agent.put("/api/users/abc").send(ok)).status).toBe(
       404,
     );
-    const fk = await request(app)
+    const fk = await admin.agent
       .put(`/api/users/${a.id}`)
       .send({ ...ok, roleId: 2147483647 });
     expect(fk.status).toBe(400);
     expect(fk.body.error.details[0].field).toBe("roleId");
-    const dup = await request(app)
+    const dup = await admin.agent
       .put(`/api/users/${a.id}`)
       .send({ ...ok, email: testEmail("B") });
     expect(dup.status).toBe(409);
@@ -157,13 +159,13 @@ describe("users API", () => {
 
   it("DELETE -> 204, second DELETE -> 404, non-numeric -> 404", async () => {
     const { body } = await createUser();
-    expect((await request(app).delete(`/api/users/${body.id}`)).status).toBe(
+    expect((await admin.agent.delete(`/api/users/${body.id}`)).status).toBe(
       204,
     );
-    expect((await request(app).delete(`/api/users/${body.id}`)).status).toBe(
+    expect((await admin.agent.delete(`/api/users/${body.id}`)).status).toBe(
       404,
     );
-    expect((await request(app).delete("/api/users/abc")).status).toBe(404);
+    expect((await admin.agent.delete("/api/users/abc")).status).toBe(404);
   });
 
   it("errors never leak internals: body is always { error: { message } }", async () => {

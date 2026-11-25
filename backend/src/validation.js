@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { HttpError } from "./errors.js";
+import { PERMISSION_KEYS } from "./permissions.js";
 
 const INT32_MAX = 2147483647;
 
@@ -12,7 +13,7 @@ const required = (max) =>
 
 // bcrypt only uses the first 72 bytes, so longer passwords are refused (not silently cut).
 export const passwordSchema = z
-  .string()
+  .string({ error: "Required" })
   .min(8, 'Must be at least 8 characters')
   .refine((s) => Buffer.byteLength(s) <= 72, 'Must be at most 72 bytes')
   .refine(noNul, NUL_MSG);
@@ -31,9 +32,14 @@ export const roleSchema = z.object({
     .refine(noNul, NUL_MSG)
     .nullish()
     .transform((v) => v || null),
+  // fixed list only; de-duplicated and sorted
+  permissions: z
+    .array(z.enum(PERMISSION_KEYS, { error: "Unknown permission" }))
+    .default([])
+    .transform((list) => [...new Set(list)].sort()),
 });
 
-export const userSchema = z.object({
+const userFields = {
   fullName: required(100),
   email: z
     .string()
@@ -48,6 +54,15 @@ export const userSchema = z.object({
     .positive("Must be a positive integer")
     .max(INT32_MAX, `Must be at most ${INT32_MAX}`),
   isActive: z.boolean().default(true),
+};
+
+// Create: password is required.
+export const userCreateSchema = z.object({ ...userFields, password: passwordSchema });
+
+// Update: password is optional; absent or empty keeps the current one.
+export const userUpdateSchema = z.object({
+  ...userFields,
+  password: z.preprocess((v) => (v === "" || v === null ? undefined : v), passwordSchema.optional()),
 });
 
 // Runs a zod schema; on failure throws 400 with one detail per field.

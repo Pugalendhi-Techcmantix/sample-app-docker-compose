@@ -1,20 +1,23 @@
-import request from "supertest";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
 import { db } from "../src/db.js";
+import { PERMISSION_KEYS } from "../src/permissions.js";
 import {
   assertNoLeftovers,
   cleanupTestData,
   isMine,
   testEmail,
-  testName,
-} from "./helpers.js";
+  testName, makeActor, TEST_PASSWORD } from "./helpers.js";
 
 const app = createApp();
 const Role = db.orm.public.Role;
 const User = db.orm.public.User;
 
+let admin;
 beforeAll(cleanupTestData);
+beforeEach(async () => {
+  admin = await makeActor(app, { permissions: PERMISSION_KEYS });
+});
 afterEach(cleanupTestData);
 afterAll(async () => {
   await cleanupTestData();
@@ -22,7 +25,7 @@ afterAll(async () => {
   await db.close();
 });
 
-const createRole = (body) => request(app).post("/api/roles").send(body);
+const createRole = (body) => admin.agent.post("/api/roles").send(body);
 
 describe("roles API", () => {
   it("POST creates a role", async () => {
@@ -47,7 +50,7 @@ describe("roles API", () => {
   });
 
   it("POST with malformed JSON -> 400, not 500", async () => {
-    const res = await request(app)
+    const res = await admin.agent
       .post("/api/roles")
       .set("Content-Type", "application/json")
       .send("{bad");
@@ -81,16 +84,16 @@ describe("roles API", () => {
     await createRole({ name: testName("Staff") });
     await createRole({ name: testName("Admin") });
     await createRole({ name: testName("Manager") });
-    const res = await request(app).get("/api/roles");
+    const res = await admin.agent.get("/api/roles");
     expect(res.status).toBe(200);
-    expect(res.body.filter(isMine).map((r) => r.name)).toEqual(
+    expect(res.body.filter((x) => isMine(x) && !x.name.includes("actor")).map((x) => x.name)).toEqual(
       ["Admin", "Manager", "Staff"].map(testName),
     );
   });
 
   it("GET one -> 200; non-numeric or unknown id -> 404", async () => {
     const { body } = await createRole({ name: testName("Admin") });
-    expect((await request(app).get(`/api/roles/${body.id}`)).status).toBe(200);
+    expect((await admin.agent.get(`/api/roles/${body.id}`)).status).toBe(200);
     for (const id of [
       "abc",
       "2147483647",
@@ -99,7 +102,7 @@ describe("roles API", () => {
       "-1",
       "99999999999999",
     ]) {
-      const res = await request(app).get(`/api/roles/${id}`);
+      const res = await admin.agent.get(`/api/roles/${id}`);
       expect(res.status, id).toBe(404);
       expect(res.body).toEqual({ error: { message: "Not found" } });
     }
@@ -108,7 +111,7 @@ describe("roles API", () => {
   it("PUT updates and bumps updatedAt", async () => {
     const { body } = await createRole({ name: testName("Admin") });
     await new Promise((r) => setTimeout(r, 15));
-    const res = await request(app)
+    const res = await admin.agent
       .put(`/api/roles/${body.id}`)
       .send({ name: testName("Super Admin") });
     expect(res.status).toBe(200);
@@ -123,35 +126,35 @@ describe("roles API", () => {
     await createRole({ name: testName("Staff") });
     const upper = testName("Admin").toUpperCase();
     expect(
-      (await request(app).put(`/api/roles/${a.id}`).send({ name: upper }))
+      (await admin.agent.put(`/api/roles/${a.id}`).send({ name: upper }))
         .status,
     ).toBe(200);
     const taken = testName("Staff").toLowerCase();
     expect(
-      (await request(app).put(`/api/roles/${a.id}`).send({ name: taken }))
+      (await admin.agent.put(`/api/roles/${a.id}`).send({ name: taken }))
         .status,
     ).toBe(409);
   });
 
   it("PUT / DELETE on unknown or non-numeric id -> 404", async () => {
     const put = (id) =>
-      request(app)
+      admin.agent
         .put(`/api/roles/${id}`)
         .send({ name: testName("X") });
     expect((await put(2147483647)).status).toBe(404);
     expect((await put("abc")).status).toBe(404);
-    expect((await request(app).delete("/api/roles/2147483647")).status).toBe(
+    expect((await admin.agent.delete("/api/roles/2147483647")).status).toBe(
       404,
     );
-    expect((await request(app).delete("/api/roles/abc")).status).toBe(404);
+    expect((await admin.agent.delete("/api/roles/abc")).status).toBe(404);
   });
 
   it("DELETE unused role -> 204, then GET -> 404", async () => {
     const { body } = await createRole({ name: testName("Admin") });
-    expect((await request(app).delete(`/api/roles/${body.id}`)).status).toBe(
+    expect((await admin.agent.delete(`/api/roles/${body.id}`)).status).toBe(
       204,
     );
-    expect((await request(app).get(`/api/roles/${body.id}`)).status).toBe(404);
+    expect((await admin.agent.get(`/api/roles/${body.id}`)).status).toBe(404);
   });
 
   it("DELETE a role in use -> 409 with the user count, role survives", async () => {
@@ -166,9 +169,9 @@ describe("roles API", () => {
       email: testEmail("b"),
       roleId: body.id,
     });
-    const res = await request(app).delete(`/api/roles/${body.id}`);
+    const res = await admin.agent.delete(`/api/roles/${body.id}`);
     expect(res.status).toBe(409);
     expect(res.body.error.message).toBe("Role is assigned to 2 user(s)");
-    expect((await request(app).get(`/api/roles/${body.id}`)).status).toBe(200);
+    expect((await admin.agent.get(`/api/roles/${body.id}`)).status).toBe(200);
   });
 });
