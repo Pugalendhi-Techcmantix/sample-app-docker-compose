@@ -1,19 +1,24 @@
 import request from "supertest";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
 import { db } from "../src/db.js";
-import { resetDb } from "./helpers.js";
+import { assertNoLeftovers, cleanupTestData, testEmail, testName } from "./helpers.js";
 
 const app = createApp();
 let role;
 
+beforeAll(cleanupTestData);
 beforeEach(async () => {
-  await resetDb();
-  role = await db.orm.public.Role.create({ name: "Admin" });
+  role = await db.orm.public.Role.create({ name: testName("Admin") });
 });
-afterAll(() => db.close());
+afterEach(cleanupTestData);
+afterAll(async () => {
+  await cleanupTestData();
+  await assertNoLeftovers();
+  await db.close();
+});
 
-const user = (o = {}) => ({ fullName: "C", email: "c@x.com", roleId: role.id, ...o });
+const user = (o = {}) => ({ fullName: "C", email: testEmail("c"), roleId: role.id, ...o });
 const field = (res, f) => res.body.error.details.map((d) => d.field).includes(f);
 
 describe("input hardening", () => {
@@ -30,7 +35,7 @@ describe("input hardening", () => {
   it("NUL character in any string field -> 400 with that field", async () => {
     const cases = [
       ["/api/roles", { name: "a\u0000b" }, "name"],
-      ["/api/roles", { name: "ok", description: "a\u0000b" }, "description"],
+      ["/api/roles", { name: testName("ok"), description: "a\u0000b" }, "description"],
       ["/api/users", user({ fullName: "a\u0000b" }), "fullName"],
       ["/api/users", user({ email: "a\u0000b@x.com" }), "email"],
     ];

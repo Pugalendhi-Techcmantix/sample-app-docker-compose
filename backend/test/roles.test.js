@@ -1,24 +1,38 @@
 import request from "supertest";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
 import { db } from "../src/db.js";
-import { resetDb } from "./helpers.js";
+import {
+  assertNoLeftovers,
+  cleanupTestData,
+  isMine,
+  testEmail,
+  testName,
+} from "./helpers.js";
 
 const app = createApp();
 const Role = db.orm.public.Role;
 const User = db.orm.public.User;
 
-beforeEach(resetDb);
-afterAll(() => db.close());
+beforeAll(cleanupTestData);
+afterEach(cleanupTestData);
+afterAll(async () => {
+  await cleanupTestData();
+  await assertNoLeftovers();
+  await db.close();
+});
 
 const createRole = (body) => request(app).post("/api/roles").send(body);
 
 describe("roles API", () => {
   it("POST creates a role", async () => {
-    const res = await createRole({ name: "Admin", description: "All access" });
+    const res = await createRole({
+      name: testName("Admin"),
+      description: "All access",
+    });
     expect(res.status).toBe(201);
     expect(res.body).toMatchObject({
-      name: "Admin",
+      name: testName("Admin"),
       description: "All access",
     });
     expect(res.body.id).toBeTypeOf("number");
@@ -42,38 +56,49 @@ describe("roles API", () => {
   });
 
   it("POST duplicate name with different case -> 409", async () => {
-    await createRole({ name: "Admin" });
-    const res = await createRole({ name: "admin" });
+    await createRole({ name: testName("Admin") });
+    const res = await createRole({ name: testName("Admin").toUpperCase() });
     expect(res.status).toBe(409);
     expect(res.body.error.message).toBe("Role name already exists");
   });
 
   it("DB backstop: lower(name) unique index rejects a case-variant even without the pre-check", async () => {
-    await Role.create({ name: "Admin" });
-    await expect(Role.create({ name: "ADMIN" })).rejects.toMatchObject({
+    await Role.create({ name: testName("Admin") });
+    await expect(
+      Role.create({ name: testName("Admin").toUpperCase() }),
+    ).rejects.toMatchObject({
       sqlState: "23505",
     });
   });
 
   it("LIKE wildcards in a name are not treated as patterns", async () => {
-    await createRole({ name: "Admin" });
-    const res = await createRole({ name: "Ad%" });
+    await createRole({ name: testName("Admin") });
+    const res = await createRole({ name: testName("Ad%") });
     expect(res.status).toBe(201);
   });
 
-  it("GET list is sorted by name", async () => {
-    await createRole({ name: "Staff" });
-    await createRole({ name: "Admin" });
-    await createRole({ name: "Manager" });
+  it("GET list is sorted by name (own rows only)", async () => {
+    await createRole({ name: testName("Staff") });
+    await createRole({ name: testName("Admin") });
+    await createRole({ name: testName("Manager") });
     const res = await request(app).get("/api/roles");
     expect(res.status).toBe(200);
-    expect(res.body.map((r) => r.name)).toEqual(["Admin", "Manager", "Staff"]);
+    expect(res.body.filter(isMine).map((r) => r.name)).toEqual(
+      ["Admin", "Manager", "Staff"].map(testName),
+    );
   });
 
   it("GET one -> 200; non-numeric or unknown id -> 404", async () => {
-    const { body } = await createRole({ name: "Admin" });
+    const { body } = await createRole({ name: testName("Admin") });
     expect((await request(app).get(`/api/roles/${body.id}`)).status).toBe(200);
-    for (const id of ["abc", "99999", "0", "1.5", "-1", "99999999999999"]) {
+    for (const id of [
+      "abc",
+      "2147483647",
+      "0",
+      "1.5",
+      "-1",
+      "99999999999999",
+    ]) {
       const res = await request(app).get(`/api/roles/${id}`);
       expect(res.status, id).toBe(404);
       expect(res.body).toEqual({ error: { message: "Not found" } });
@@ -81,44 +106,48 @@ describe("roles API", () => {
   });
 
   it("PUT updates and bumps updatedAt", async () => {
-    const { body } = await createRole({ name: "Admin" });
+    const { body } = await createRole({ name: testName("Admin") });
     await new Promise((r) => setTimeout(r, 15));
     const res = await request(app)
       .put(`/api/roles/${body.id}`)
-      .send({ name: "Super Admin" });
+      .send({ name: testName("Super Admin") });
     expect(res.status).toBe(200);
-    expect(res.body.name).toBe("Super Admin");
+    expect(res.body.name).toBe(testName("Super Admin"));
     expect(new Date(res.body.updatedAt).getTime()).toBeGreaterThan(
       new Date(res.body.createdAt).getTime(),
     );
   });
 
-  it("PUT may keep its own name (changing only the case) but not take another role's", async () => {
-    const a = (await createRole({ name: "Admin" })).body;
-    await createRole({ name: "Staff" });
+  it("PUT may keep its own name (changing only the case) but not take another role name", async () => {
+    const a = (await createRole({ name: testName("Admin") })).body;
+    await createRole({ name: testName("Staff") });
+    const upper = testName("Admin").toUpperCase();
     expect(
-      (await request(app).put(`/api/roles/${a.id}`).send({ name: "ADMIN" }))
+      (await request(app).put(`/api/roles/${a.id}`).send({ name: upper }))
         .status,
     ).toBe(200);
+    const taken = testName("Staff").toLowerCase();
     expect(
-      (await request(app).put(`/api/roles/${a.id}`).send({ name: "staff" }))
+      (await request(app).put(`/api/roles/${a.id}`).send({ name: taken }))
         .status,
     ).toBe(409);
   });
 
   it("PUT / DELETE on unknown or non-numeric id -> 404", async () => {
-    expect(
-      (await request(app).put("/api/roles/99999").send({ name: "X" })).status,
-    ).toBe(404);
-    expect(
-      (await request(app).put("/api/roles/abc").send({ name: "X" })).status,
-    ).toBe(404);
-    expect((await request(app).delete("/api/roles/99999")).status).toBe(404);
+    const put = (id) =>
+      request(app)
+        .put(`/api/roles/${id}`)
+        .send({ name: testName("X") });
+    expect((await put(2147483647)).status).toBe(404);
+    expect((await put("abc")).status).toBe(404);
+    expect((await request(app).delete("/api/roles/2147483647")).status).toBe(
+      404,
+    );
     expect((await request(app).delete("/api/roles/abc")).status).toBe(404);
   });
 
   it("DELETE unused role -> 204, then GET -> 404", async () => {
-    const { body } = await createRole({ name: "Admin" });
+    const { body } = await createRole({ name: testName("Admin") });
     expect((await request(app).delete(`/api/roles/${body.id}`)).status).toBe(
       204,
     );
@@ -126,9 +155,17 @@ describe("roles API", () => {
   });
 
   it("DELETE a role in use -> 409 with the user count, role survives", async () => {
-    const { body } = await createRole({ name: "Admin" });
-    await User.create({ fullName: "A", email: "a@x.com", roleId: body.id });
-    await User.create({ fullName: "B", email: "b@x.com", roleId: body.id });
+    const { body } = await createRole({ name: testName("Admin") });
+    await User.create({
+      fullName: "A",
+      email: testEmail("a"),
+      roleId: body.id,
+    });
+    await User.create({
+      fullName: "B",
+      email: testEmail("b"),
+      roleId: body.id,
+    });
     const res = await request(app).delete(`/api/roles/${body.id}`);
     expect(res.status).toBe(409);
     expect(res.body.error.message).toBe("Role is assigned to 2 user(s)");
