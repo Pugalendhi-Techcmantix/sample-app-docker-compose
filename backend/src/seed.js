@@ -11,8 +11,8 @@ const User = db.orm.public.User;
 export async function seedDatabase({
   roles = SEED_ROLES,
   adminRole = "Admin",
-  adminEmail = process.env.SEED_ADMIN_EMAIL,
-  adminPassword = process.env.SEED_ADMIN_PASSWORD,
+  adminEmail,
+  adminPassword,
   log = console.log,
 } = {}) {
   for (const role of roles) {

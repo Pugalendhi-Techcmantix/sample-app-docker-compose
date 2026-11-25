@@ -56,7 +56,7 @@ Backend tests use the **same database as `DATABASE_URL`** (it must already be mi
 self-cleaning: every test creates its own dummy rows (role names `__test_<runId>_...`, emails
 `...<runId>@test.invalid`), only asserts on those rows, and deletes exactly them afterwards
 (users first, then roles). They never truncate or wipe tables, so your real data is untouched.
-A guard fails the run if any dummy row is left over. (Auto-increment ids do advance, so you may see
+A guard fails the run if any dummy row is left over. Tests set their own JWT secret and sign in as dummy users with just the permissions each test needs. (Auto-increment ids do advance, so you may see
 gaps in ids.)
 
 Optional end-to-end smoke test (needs the Docker stack from section 3 running on port 8080):
@@ -137,6 +137,50 @@ Tip: to shorten the commands, set `COMPOSE_FILE=docker-compose.yml:docker-compos
 (use `;` instead of `:` in Windows PowerShell/cmd) and then just run `docker compose up -d --build`.
 Unset it to get the production-like setup again.
 
+## Authentication and permissions
+
+Every API call except `GET /api/live` and `GET /api/health` needs a signed-in user. Sign-in is
+email + password; the server sets an `httpOnly` cookie named `token` (a JWT that carries only the
+user id, lifetime `JWT_EXPIRES_IN`, default 8h). What a user may do comes from the permissions ticked
+on their **role**, read from the database on every request, so a change to a role, to a user's role
+or to the active flag applies on the next request.
+
+Permissions: `users.view`, `users.create`, `users.edit`, `users.delete`, `roles.view`,
+`roles.manage`. Every signed-in user can open their profile and change their own password.
+Seeded roles: **Admin** = all six, **Manager** = `users.view`, `users.create`, `users.edit`,
+`roles.view`, **Staff** = `users.view`.
+
+Safety rules: you cannot delete or deactivate your own account, and a role change or delete that
+would leave no role with both `roles.manage` and `users.edit` is refused (409).
+
+### First login
+
+1. Add the auth settings to `backend/.env` (local run) or the repo-root `.env` (Docker). See
+   `.env.example`; at minimum `JWT_SECRET` (32+ random characters, the API will not start without
+   it), `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD`.
+2. `npm run db:migrate` (adds `users.password_hash` and `roles.permissions`; existing rows are kept).
+3. `npm run db:seed` (creates the roles with their permissions and the administrator; safe to repeat,
+   never overwrites existing roles or users). Docker: `docker compose exec api npm run db:migrate`
+   and `docker compose exec api npm run db:seed`.
+4. Open the app and sign in with `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`, then change the password
+   on the profile page.
+
+Users that existed before this feature have no password and cannot sign in until an admin sets
+one (edit the user and fill the password field).
+
+Login hardening: wrong email, wrong password, inactive user and a user without a password all give the
+same `401 Invalid email or password`; sign-in is limited to 10 attempts per minute per IP (429).
+Passwords are hashed with bcrypt (cost 12) and are 8 to 72 bytes long; the hash is never returned
+by any endpoint. Behind a reverse proxy all clients share the proxy IP for rate limiting.
+
+Auth settings: `JWT_SECRET`, `JWT_EXPIRES_IN`, `COOKIE_SECURE`, `SEED_ADMIN_EMAIL`,
+`SEED_ADMIN_PASSWORD`, `LOGIN_RATE_LIMIT_DISABLED` (see the table below). The browser sends the cookie
+only to allowed origins (`CORS_ORIGINS`, exact list, never `*`).
+
+API summary: `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`,
+`POST /api/auth/change-password`, `GET /api/permissions`, `GET /api/roles/options`, and the
+`/api/users` and `/api/roles` endpoints, each needing the permission listed above.
+
 ## 4. Environment variables
 
 | Variable | Used by | Default | Purpose |
@@ -144,6 +188,11 @@ Unset it to get the production-like setup again.
 | `DATABASE_URL` | backend, prisma CLI | none (required) | PostgreSQL connection string. Docker: `postgres://postgres:password@db:5432/crud`; local backend: `postgres://postgres:password@localhost:5433/crud` (the Docker db) |
 | `PORT` | backend | `4000` | API listen port |
 | `CORS_ORIGINS` | backend | `http://localhost:5173,http://localhost:8080` | Comma-separated browser origins allowed to call the API |
+| `JWT_SECRET` | backend | none (required) | 32+ char secret that signs login cookies; the API refuses to start without it |
+| `JWT_EXPIRES_IN` | backend | `8h` | Login session lifetime |
+| `COOKIE_SECURE` | backend | `false` | `true` adds the Secure flag to the cookie (use with HTTPS) |
+| `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | seed script | none | First administrator created by `npm run db:seed` |
+| `LOGIN_RATE_LIMIT_DISABLED` | backend | `false` | `true` turns the login rate limit off |
 | `VITE_API_URL` | frontend (build time) | `/api` | API base URL the browser uses. Rebuild the frontend after changing it |
 | `API_PROXY_TARGET` | frontend dev server | `http://localhost:4000` | Target of the Vite `/api` proxy when `VITE_API_URL` is `/api` |
 | `DB_HOST_PORT` | docker compose | `5433` | Host port of the Docker db, for the local backend and PC tools such as pgAdmin (`localhost:5433`). Containers use `db:5432`. |

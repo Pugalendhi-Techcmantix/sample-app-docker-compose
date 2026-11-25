@@ -18,6 +18,9 @@ const User = db.orm.public.User;
 
 // Deletes ONLY rows carrying this run's marker: users first, then roles.
 export async function cleanupTestData() {
+  // Any user holding one of this run's marker roles was created by a test too.
+  const mine = await Role.where((r) => r.name.ilike(`${escapeLike(NAME_PREFIX)}%`)).all();
+  for (const role of mine) await User.where({ roleId: role.id }).deleteAll();
   await User.where((u) => u.email.ilike(`%${escapeLike(EMAIL_SUFFIX)}`)).deleteAll();
   await Role.where((r) => r.name.ilike(`${escapeLike(NAME_PREFIX)}%`)).deleteAll();
 }
