@@ -132,8 +132,8 @@ export default function RolesPage() {
             <tbody>
               {roles.map((r) => (
                 <tr key={r.id}>
-                  <td data-label="Name">{r.name}</td>
-                  <td data-label="Description">{r.description || '—'}</td>
+                  <td data-label="Name" className="break">{r.name}</td>
+                  <td data-label="Description" className="break">{r.description || '—'}</td>
                   <td data-label="Actions" className="row-actions">
                     <button type="button" className="btn" onClick={() => openForm(r)} aria-label={`Edit ${r.name}`}>Edit</button>
                     <button type="button" className="btn btn-danger-outline" onClick={() => setToDelete(r)} aria-label={`Delete ${r.name}`}>Delete</button>
