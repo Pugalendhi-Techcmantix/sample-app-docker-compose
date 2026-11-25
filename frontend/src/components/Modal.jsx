@@ -1,7 +1,10 @@
 import { useEffect, useRef } from 'react'
+import { X } from 'lucide-react'
 
-// Native <dialog>; children are mounted only while open so forms start fresh.
-export default function Modal({ open, title, titleId = 'modal-title', onClose, children }) {
+// Native <dialog>: focus is trapped and Escape closes. Children are mounted only while open
+// so forms start fresh. The close button comes last in the DOM so focus lands on the first
+// field (or Cancel in a confirm) rather than on Close.
+export default function Modal({ open, title, titleId = 'modal-title', onClose, wide, children }) {
   const ref = useRef(null)
   useEffect(() => {
     const d = ref.current
@@ -17,11 +20,14 @@ export default function Modal({ open, title, titleId = 'modal-title', onClose, c
   }, [open])
 
   return (
-    <dialog ref={ref} className="dialog" aria-labelledby={titleId} onCancel={onClose}>
+    <dialog ref={ref} className={wide ? 'dialog dialog-wide' : 'dialog'} aria-labelledby={titleId} onCancel={onClose}>
       {open && (
         <>
           <h2 id={titleId}>{title}</h2>
           {children}
+          <button type="button" className="btn btn-ghost btn-icon btn-sm dialog-close" onClick={onClose} aria-label="Close dialog">
+            <X size={18} aria-hidden="true" />
+          </button>
         </>
       )}
     </dialog>

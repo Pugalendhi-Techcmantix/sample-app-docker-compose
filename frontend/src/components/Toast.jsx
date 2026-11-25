@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
+import { CircleAlert, CircleCheck, X } from 'lucide-react'
 
 const ToastContext = createContext(() => {})
 
@@ -20,12 +21,18 @@ export function ToastProvider({ children }) {
     <ToastContext.Provider value={toast}>
       {children}
       <div className="toasts" role="status" aria-live="polite">
-        {toasts.map((t) => (
-          <div key={t.id} className={`toast toast-${t.type}`}>
-            <span>{t.message}</span>
-            <button type="button" className="btn btn-ghost" onClick={() => dismiss(t.id)} aria-label="Dismiss">×</button>
-          </div>
-        ))}
+        {toasts.map((t) => {
+          const Icon = t.type === 'error' ? CircleAlert : CircleCheck
+          return (
+            <div key={t.id} className={`toast toast-${t.type}`}>
+              <Icon size={18} aria-hidden="true" />
+              <span>{t.message}</span>
+              <button type="button" className="btn btn-ghost btn-icon" onClick={() => dismiss(t.id)} aria-label="Dismiss">
+                <X size={16} aria-hidden="true" />
+              </button>
+            </div>
+          )
+        })}
       </div>
     </ToastContext.Provider>
   )

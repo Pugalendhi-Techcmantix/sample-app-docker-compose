@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { makeUser, renderApp, res } from '../test-render.jsx'
@@ -111,8 +111,10 @@ describe('permissions', () => {
     renderApp('/', { user: makeUser(['users.view']) })
     expect(await screen.findByLabelText('Users count')).toBeTruthy()
     expect(screen.queryByLabelText('Roles count')).toBeNull()
-    expect(screen.getByText('Admin')).toBeTruthy()
-    expect(screen.getAllByText('users.view').length).toBeGreaterThan(0)
+    // the recent-users list also shows role names, so look inside the "Your access" card
+    const access = screen.getByRole('region', { name: 'Your access' })
+    expect(within(access).getByText('Admin')).toBeTruthy()
+    expect(within(access).getAllByText('users.view').length).toBeGreaterThan(0)
   })
 })
 
