@@ -34,6 +34,13 @@ describe('RolesPage', () => {
     expect(screen.getByText('All access')).toBeTruthy()
   })
 
+  it('allows long unbroken names to wrap', async () => {
+    mockFetch(() => res(200, [{ id: 1, name: 'A'.repeat(50), description: 'd'.repeat(200) }]))
+    renderPage(<RolesPage />)
+    const cell = (await screen.findByText('A'.repeat(50))).closest('td')
+    expect(cell.className).toContain('break')
+  })
+
   it('shows the empty state', async () => {
     mockFetch(() => res(200, []))
     renderPage(<RolesPage />)

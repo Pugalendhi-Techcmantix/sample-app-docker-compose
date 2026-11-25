@@ -47,8 +47,9 @@ table.data { width: 100%; border-collapse: collapse; }
 .data th, .data td { text-align: left; padding: .65rem .9rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .data th { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: #fafbfc; }
 .data tbody tr:last-child td { border-bottom: 0; }
-.row-actions { display: flex; gap: .4rem; flex-wrap: wrap; }
-.break { overflow-wrap: anywhere; }
+.row-actions { white-space: nowrap; }
+.row-actions .btn + .btn { margin-left: .4rem; }
+.break { overflow-wrap: anywhere; word-break: break-word; }
 .badge { display: inline-block; padding: .1rem .55rem; border-radius: 999px; font-size: .8rem; font-weight: 600; }
 .badge-on { background: var(--ok-bg); color: var(--ok); }
 .badge-off { background: var(--off-bg); color: var(--muted); }
@@ -63,6 +64,6 @@ table.data { width: 100%; border-collapse: collapse; }
   .data tbody tr:last-child { border-bottom: 0; }
   .data td { display: flex; gap: 1rem; justify-content: space-between; border: 0; padding: .3rem .75rem; text-align: right; }
   .data td::before { content: attr(data-label); font-weight: 600; color: var(--muted); text-align: left; flex: none; }
-  .data td.row-actions { justify-content: flex-end; }
+  .data td.row-actions { justify-content: flex-end; white-space: normal; }
   .data td.row-actions::before { display: none; }
 }

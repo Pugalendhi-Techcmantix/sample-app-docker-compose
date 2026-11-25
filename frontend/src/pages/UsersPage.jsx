@@ -166,9 +166,9 @@ export default function UsersPage() {
             <tbody>
               {users.map((u) => (
                 <tr key={u.id}>
-                  <td data-label="Full name">{u.fullName}</td>
+                  <td data-label="Full name" className="break">{u.fullName}</td>
                   <td data-label="Email" className="break">{u.email}</td>
-                  <td data-label="Role">{u.roleName}</td>
+                  <td data-label="Role" className="break">{u.roleName}</td>
                   <td data-label="Status">
                     <span className={`badge ${u.isActive ? 'badge-on' : 'badge-off'}`}>{u.isActive ? 'Active' : 'Inactive'}</span>
                   </td>
