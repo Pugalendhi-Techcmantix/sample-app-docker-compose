@@ -88,6 +88,55 @@ docker compose down -v              # remove containers AND all data (then migra
 The compose `api` healthcheck uses `/api/live`, so the stack looks healthy before you migrate.
 The web container proxies `/api` to the api container, so no CORS is involved at port 8080.
 
+## Docker: development (bind mounts, nodemon, hot reload)
+
+Your source folders are mounted into the containers: edit files on your PC and the containers
+pick the change up without a rebuild (backend restarts through nodemon, frontend hot-reloads
+through Vite). Uses `docker-compose.dev.yml` on top of the normal `docker-compose.yml`.
+
+```sh
+# first run (builds the dev images, starts db + api + web)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+
+# once, and after schema changes: create tables and seed roles
+docker compose -f docker-compose.yml -f docker-compose.dev.yml exec api npm run db:migrate
+docker compose -f docker-compose.yml -f docker-compose.dev.yml exec api npm run db:seed
+```
+
+- UI: <http://localhost:5173> (Vite dev server, calls the API at `http://localhost:4000/api`)
+- API: <http://localhost:4000>
+- Logs: `docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f api web`
+- Stop and remove containers (data kept): `docker compose -f docker-compose.yml -f docker-compose.dev.yml down`
+- Also wipe the database: add `-v` to the `down` command
+- Run only one setup at a time: `down` the production-like stack before starting the dev one
+  (and vice versa), because both use the same container names and port 4000.
+
+**When do I need a rebuild?** Only when `package.json`, `package-lock.json` or a Dockerfile
+changes. Then run the `up -d --build` command again with `-V` (`up -d --build -V`) so the
+containers get fresh `node_modules` (they live in anonymous volumes, so the folders on your PC
+never overwrite them). Source edits never need a rebuild.
+
+**After editing `backend/src/prisma/contract.prisma`:** run these inside the api container,
+then restart is automatic:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.dev.yml exec api npm run contract:emit
+docker compose -f docker-compose.yml -f docker-compose.dev.yml exec api npx prisma migration plan --name <short_name>
+docker compose -f docker-compose.yml -f docker-compose.dev.yml exec api npm run db:migrate
+```
+
+(The generated files land in `backend/` on your PC through the bind mount; commit them.)
+
+**File watching on Windows:** file-change events from Windows folders do not reach Linux
+containers, so the dev setup uses polling (`legacyWatch` in `backend/nodemon.json`,
+`VITE_USE_POLLING=true` for Vite). A change can take a second or so to show up; this is normal.
+
+Production mode (`docker compose up -d --build`, section 3) is unchanged.
+
+Tip: to shorten the commands, set `COMPOSE_FILE=docker-compose.yml:docker-compose.dev.yml`
+(use `;` instead of `:` in Windows PowerShell/cmd) and then just run `docker compose up -d --build`.
+Unset it to get the production-like setup again.
+
 ## 4. Environment variables
 
 | Variable | Used by | Default | Purpose |
