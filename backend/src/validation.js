@@ -10,6 +10,18 @@ const NUL_MSG = "Must not contain null characters";
 const required = (max) =>
   z.string().trim().min(1, "Required").max(max, `Must be at most ${max} characters`).refine(noNul, NUL_MSG);
 
+// bcrypt only uses the first 72 bytes, so longer passwords are refused (not silently cut).
+export const passwordSchema = z
+  .string()
+  .min(8, 'Must be at least 8 characters')
+  .refine((s) => Buffer.byteLength(s) <= 72, 'Must be at most 72 bytes')
+  .refine(noNul, NUL_MSG);
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string({ error: 'Required' }).min(1, 'Required'),
+  newPassword: passwordSchema,
+});
+
 export const roleSchema = z.object({
   name: required(50),
   description: z
