@@ -1,0 +1,105 @@
+# Role and User master CRUD
+
+React (Vite) frontend, Express API, PostgreSQL. Data access uses Prisma ORM 8
+(contract-first: `backend/src/prisma/contract.prisma`, migrations in `backend/migrations/`).
+
+- Frontend: <http://localhost:5173> (dev) or <http://localhost:8080> (Docker)
+- API: `PORT` (default 4000), under `/api`
+
+## 1. Run locally against your own PostgreSQL
+
+Prerequisites: Node 24, a running PostgreSQL 15+.
+
+```sh
+# 1. Create an empty database (name is up to you, "crud" below)
+createdb crud
+
+# 2. Backend
+cd backend
+npm install
+# create backend/.env (git-ignored) with at least:
+#   DATABASE_URL=postgres://USER:PASSWORD@localhost:5433/crud
+#   PORT=4000                       # optional
+npm run db:migrate                  # creates the tables
+npm run db:seed                     # adds roles Admin, Manager, Staff (safe to repeat)
+npm start                           # API on http://localhost:4000
+
+# 3. Frontend (second terminal)
+cd frontend
+npm install
+npm run dev                         # http://localhost:5173
+```
+
+In dev the frontend calls `VITE_API_URL` (committed `frontend/.env.development` points to
+`http://localhost:4000/api`, which is why the API sends CORS headers for `CORS_ORIGINS`).
+If your API runs on another port, put `VITE_API_URL=http://localhost:4001/api` in
+`frontend/.env.development.local` (git-ignored).
+
+API health:
+
+| URL | Meaning |
+|---|---|
+| `GET /api/live` | 200 `{"status":"live"}` as soon as the process is up (no DB access) |
+| `GET /api/health` | 200 `{"status":"ok"}`; 503 `{"status":"db-not-migrated"}` if the tables are missing (run `npm run db:migrate`); 503 `{"status":"db-down"}` if the database is unreachable |
+
+The API starts even when the database is empty or down; it does not crash-loop. Only the
+endpoints that need tables fail (with a generic 500) until you migrate.
+
+## 2. Run the tests
+
+```sh
+cd backend && npm test      # API tests
+cd frontend && npm test     # UI tests (mocked fetch, no database)
+```
+
+Backend tests use the **same database as `DATABASE_URL`** (it must already be migrated). They are
+self-cleaning: every test creates its own dummy rows (role names `__test_<runId>_...`, emails
+`...<runId>@test.invalid`), only asserts on those rows, and deletes exactly them afterwards
+(users first, then roles). They never truncate or wipe tables, so your real data is untouched.
+A guard fails the run if any dummy row is left over. (Auto-increment ids do advance, so you may see
+gaps in ids.)
+
+Optional end-to-end smoke test (needs the Docker stack from section 3 running on port 8080):
+`npm install && npx playwright test` in the repo root. It removes the data it creates.
+
+## 3. Run with Docker
+
+```sh
+cp .env.example .env                # first time only
+docker compose up -d --build        # db, api, web
+
+# The container does NOT migrate or seed by itself. Run once, then after schema changes:
+docker compose exec api npm run db:migrate
+docker compose exec api npm run db:seed
+
+# open http://localhost:8080
+```
+
+Other commands:
+
+```sh
+docker compose logs -f api          # follow API logs
+docker compose stop                 # stop, keep data
+docker compose start                # start again
+docker compose down                 # remove containers, keep data (volume pgdata)
+docker compose down -v              # remove containers AND all data (then migrate/seed again)
+```
+
+The compose `api` healthcheck uses `/api/live`, so the stack looks healthy before you migrate.
+The web container proxies `/api` to the api container, so no CORS is involved at port 8080.
+
+## 4. Environment variables
+
+| Variable | Used by | Default | Purpose |
+|---|---|---|---|
+| `DATABASE_URL` | backend, prisma CLI | none (required) | PostgreSQL connection string. Docker: `postgres://root@db:5432/crud` |
+| `PORT` | backend | `4000` | API listen port |
+| `CORS_ORIGINS` | backend | `http://localhost:5173,http://localhost:8080` | Comma-separated browser origins allowed to call the API |
+| `VITE_API_URL` | frontend (build time) | `/api` | API base URL the browser uses. Rebuild the frontend after changing it |
+| `API_PROXY_TARGET` | frontend dev server | `http://localhost:4000` | Target of the Vite `/api` proxy when `VITE_API_URL` is `/api` |
+| `DB_HOST_PORT` | docker compose | `5433` | Host port published for the db container |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | db container | `root` / empty / `crud` | Database created on first start of the db container |
+| `POSTGRES_HOST_AUTH_METHOD` | db container | `trust` | Local-only: no password needed |
+
+Real values live in git-ignored `.env` files (`.env` in the repo root for Docker, `backend/.env`
+for local runs, `frontend/.env*.local`). Commit only the `.env.example` files.
