@@ -1,0 +1,6 @@
+{
+  "name": "dev-dash-e2e",
+  "private": true,
+  "scripts": { "e2e": "playwright test" },
+  "devDependencies": { "@playwright/test": "1.49.1" }
+}
