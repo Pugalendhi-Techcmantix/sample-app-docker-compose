@@ -7,10 +7,13 @@ export class ApiError extends Error {
   }
 }
 
+export const normalizeBase = (v) => (v || '/api').trim().replace(/\/+$/, '') || '/api'
+const BASE = normalizeBase(import.meta.env.VITE_API_URL)
+
 async function request(method, path, body) {
   let res
   try {
-    res = await fetch(`/api${path}`, {
+    res = await fetch(`${BASE}${path}`, {
       method,
       headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
