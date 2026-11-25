@@ -146,7 +146,7 @@ Unset it to get the production-like setup again.
 | `CORS_ORIGINS` | backend | `http://localhost:5173,http://localhost:8080` | Comma-separated browser origins allowed to call the API |
 | `VITE_API_URL` | frontend (build time) | `/api` | API base URL the browser uses. Rebuild the frontend after changing it |
 | `API_PROXY_TARGET` | frontend dev server | `http://localhost:4000` | Target of the Vite `/api` proxy when `VITE_API_URL` is `/api` |
-| (fixed in compose) | docker compose | `5434` | Host port of the Docker db, for PC tools such as pgAdmin (`localhost:5434`). Containers use `db:5432`. |
+| `DB_HOST_PORT` | docker compose | `5433` | Host port of the Docker db, for PC tools such as pgAdmin (`localhost:5433`). Containers use `db:5432`. |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | db container | `root` / `password` / `crud` | Database created on first start of the db container |
 
 Real values live in git-ignored `.env` files (`.env` in the repo root for Docker, `backend/.env`

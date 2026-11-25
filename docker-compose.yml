@@ -3,8 +3,7 @@ services:
     image: postgres:17-alpine
     env_file: .env
     ports:
-      # Host port 5434: 5433 is used by a PostgreSQL installed directly on the PC
-      - "5434:5432"
+      - "${DB_HOST_PORT:-5433}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
