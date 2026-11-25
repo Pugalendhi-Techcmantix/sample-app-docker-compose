@@ -1,0 +1,27 @@
+// use prisma-8
+
+model Role {
+  id          Int                @id @default(autoincrement())
+  name        String(storage: varchar, length: 50)
+  description String(storage: varchar, length: 255)?
+  createdAt   temporal.CreatedAt @map("created_at")
+  updatedAt   temporal.UpdatedAt @map("updated_at")
+  users       User[]
+
+  @@index(expression: sql`lower(name)`, unique: true, name: "roles_name_lower_key")
+  @@map("roles")
+}
+
+model User {
+  id        Int                @id @default(autoincrement())
+  fullName  String(storage: varchar, length: 100) @map("full_name")
+  email     String(storage: varchar, length: 255) @unique
+  roleId    Int                @map("role_id")
+  role      Role               @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  isActive  Boolean            @default(true) @map("is_active")
+  createdAt temporal.CreatedAt @map("created_at")
+  updatedAt temporal.UpdatedAt @map("updated_at")
+
+  @@index([roleId])
+  @@map("users")
+}
