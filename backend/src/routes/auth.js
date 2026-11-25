@@ -18,15 +18,30 @@ import { changePasswordSchema, parseBody } from "../validation.js";
 const router = Router();
 const invalid = () => new HttpError(401, "Invalid email or password");
 
-// 10 attempts / minute / IP (switched off in tests via LOGIN_RATE_LIMIT_DISABLED).
-const loginLimiter = rateLimit({
-  windowMs: 60_000,
+const tooMany = (req, res) =>
+  res.status(429).json({ error: { message: "Too many attempts, try again later" } });
+const skip = () => config.loginRateLimitDisabled; // switched off in tests only
+
+// Login: 10 attempts / minute / IP, and 10 attempts / 15 minutes / email (stops distributed guessing).
+const loginIpLimiter = rateLimit({ windowMs: 60_000, limit: 10, skip, handler: tooMany });
+const loginEmailLimiter = rateLimit({
+  windowMs: 15 * 60_000,
   limit: 10,
-  skip: () => config.loginRateLimitDisabled,
-  handler: (req, res) => res.status(429).json({ error: { message: "Too many login attempts, try again in a minute" } }),
+  skip,
+  handler: tooMany,
+  keyGenerator: (req) =>
+    typeof req.body?.email === "string" ? `email:${req.body.email.trim().toLowerCase()}` : "email:none",
+});
+// Change password: 10 attempts / 15 minutes / signed-in user.
+const changePasswordLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: 10,
+  skip,
+  handler: tooMany,
+  keyGenerator: (req) => `user:${req.user.id}`,
 });
 
-router.post("/login", loginLimiter, async (req, res) => {
+router.post("/login", loginIpLimiter, loginEmailLimiter, async (req, res) => {
   const { email, password } = req.body ?? {};
   if (typeof email !== "string" || typeof password !== "string") throw invalid();
   const user = await findUserWithRole((u) => u.email.eq(email.trim().toLowerCase()));
@@ -44,7 +59,7 @@ router.post("/logout", (req, res) => {
 
 router.get("/me", requireAuth, (req, res) => res.json({ user: req.user }));
 
-router.post("/change-password", requireAuth, async (req, res) => {
+router.post("/change-password", requireAuth, changePasswordLimiter, async (req, res) => {
   const { currentPassword, newPassword } = parseBody(changePasswordSchema, req.body);
   const user = await findUserWithRole({ id: req.user.id });
   if (!(await verifyPassword(currentPassword, user.passwordHash))) {

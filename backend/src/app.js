@@ -21,10 +21,14 @@ async function checkDb() {
 }
 
 export function createApp({
+  trustProxy = config.trustProxy,
   corsOrigins = config.corsOrigins,
   checkDb: check = checkDb,
 } = {}) {
   const app = express();
+  app.disable("x-powered-by");
+  // Only behind a known reverse proxy; otherwise X-Forwarded-For could be spoofed to dodge rate limits.
+  if (trustProxy > 0) app.set("trust proxy", trustProxy);
   // Origins not on the list simply get no CORS headers.
   app.use(
     cors({

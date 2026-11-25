@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { db } from "../src/db.js";
+import { escapeLike } from "../src/like.js";
 
 // Every dummy row carries this run's marker, so tests only ever touch what they created.
 export const runId = process.env.TEST_RUN_ID ?? randomBytes(4).toString("hex");
@@ -12,7 +13,6 @@ export const isMine = (row) =>
   (row.name !== undefined && row.name.toLowerCase().startsWith(NAME_PREFIX)) ||
   (row.email !== undefined && row.email.toLowerCase().endsWith(EMAIL_SUFFIX));
 
-const escapeLike = (s) => s.replace(/[\%_]/g, "\$&");
 const Role = db.orm.public.Role;
 const User = db.orm.public.User;
 

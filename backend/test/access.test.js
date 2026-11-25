@@ -37,75 +37,78 @@ afterAll(async () => {
 
 const NOT_FOUND_ID = 2147483647;
 
-// [method, path, required permission, body]. Bodies are valid so a passing actor gets past validation.
-let fixtures;
-beforeEach(async () => {
-  const role = await Role.create({ name: testName("target") });
-  fixtures = { roleId: role.id };
-});
-const routes = () => [
-  ["get", "/api/users", "users.view"],
-  ["get", `/api/users/${NOT_FOUND_ID}`, "users.view"],
-  [
-    "post",
-    "/api/users",
-    "users.create",
-    {
-      fullName: "N",
-      email: testEmail("matrix"),
-      roleId: fixtures.roleId,
-      password: TEST_PASSWORD,
+// One entry per protected route. make() creates fresh dummy rows and returns [method, path, body],
+// so the "allowed" call hits real data and must return the exact success status.
+const lowRole = () => Role.create({ name: testName(`t${Math.random().toString(36).slice(2, 8)}`) });
+const lowUser = async () => {
+  const role = await lowRole();
+  const email = testEmail(`t${Math.random().toString(36).slice(2, 8)}`);
+  return { role, user: await User.create({ fullName: "T", email, roleId: role.id }), email };
+};
+const routeDefs = [
+  { needed: "users.view", ok: 200, make: async () => ["get", "/api/users"] },
+  { needed: "users.view", ok: 200, make: async () => ["get", `/api/users/${(await lowUser()).user.id}`] },
+  {
+    needed: "users.create",
+    ok: 201,
+    make: async () => [
+      "post",
+      "/api/users",
+      { fullName: "N", email: testEmail(`c${Math.random().toString(36).slice(2, 8)}`), roleId: (await lowRole()).id, password: TEST_PASSWORD },
+    ],
+  },
+  {
+    needed: "users.edit",
+    ok: 200,
+    make: async () => {
+      const t = await lowUser();
+      return ["put", `/api/users/${t.user.id}`, { fullName: "N2", email: t.email, roleId: t.role.id }];
     },
-  ],
-  [
-    "put",
-    `/api/users/${NOT_FOUND_ID}`,
-    "users.edit",
-    { fullName: "N", email: testEmail("matrix2"), roleId: fixtures.roleId },
-  ],
-  ["delete", `/api/users/${NOT_FOUND_ID}`, "users.delete"],
-  ["get", "/api/roles", "roles.view"],
-  ["get", `/api/roles/${NOT_FOUND_ID}`, "roles.view"],
-  ["post", "/api/roles", "roles.manage", { name: testName("matrix-role") }],
-  [
-    "put",
-    `/api/roles/${NOT_FOUND_ID}`,
-    "roles.manage",
-    { name: testName("matrix-role2") },
-  ],
-  ["delete", `/api/roles/${NOT_FOUND_ID}`, "roles.manage"],
+  },
+  { needed: "users.delete", ok: 204, make: async () => ["delete", `/api/users/${(await lowUser()).user.id}`] },
+  { needed: "roles.view", ok: 200, make: async () => ["get", "/api/roles"] },
+  { needed: "roles.view", ok: 200, make: async () => ["get", `/api/roles/${(await lowRole()).id}`] },
+  {
+    needed: "roles.manage",
+    ok: 201,
+    make: async () => ["post", "/api/roles", { name: testName(`p${Math.random().toString(36).slice(2, 8)}`) }],
+  },
+  {
+    needed: "roles.manage",
+    ok: 200,
+    make: async () => {
+      const r = await lowRole();
+      return ["put", `/api/roles/${r.id}`, { name: r.name, description: "changed" }];
+    },
+  },
+  { needed: "roles.manage", ok: 204, make: async () => ["delete", `/api/roles/${(await lowRole()).id}`] },
 ];
 
 describe("401 / 403 matrix", () => {
   it("no cookie -> 401 on every protected route", async () => {
-    for (const [method, path, , body] of routes()) {
+    for (const def of routeDefs) {
+      const [method, path, body] = await def.make();
       const res = await request(app)[method](path).send(body);
       expect(res.status, `${method} ${path}`).toBe(401);
       expect(res.body.error.message).toBeTypeOf("string");
     }
-    for (const path of [
-      "/api/permissions",
-      "/api/roles/options",
-      "/api/auth/me",
-    ]) {
+    for (const path of ["/api/permissions", "/api/roles/options", "/api/auth/me"]) {
       expect((await request(app).get(path)).status, path).toBe(401);
     }
   });
 
-  it("signed in without the needed permission -> 403 Forbidden; with only that permission -> allowed", async () => {
-    for (const [method, path, needed, body] of routes()) {
-      const without = await makeActor(app, {
-        permissions: PERMISSION_KEYS.filter((k) => k !== needed),
-      });
-      const denied = await without.agent[method](path).send(body);
-      expect(denied.status, `${method} ${path} without ${needed}`).toBe(403);
+  it("without the needed permission -> 403 Forbidden and no change; with only that permission -> exact success status", async () => {
+    for (const def of routeDefs) {
+      const without = await makeActor(app, { permissions: PERMISSION_KEYS.filter((k) => k !== def.needed) });
+      const [m1, p1, b1] = await def.make();
+      const denied = await without.agent[m1](p1).send(b1);
+      expect(denied.status, `${m1} ${p1} without ${def.needed}`).toBe(403);
       expect(denied.body).toEqual({ error: { message: "Forbidden" } });
 
-      const only = await makeActor(app, { permissions: [needed] });
-      const allowed = await only.agent[method](path).send(body);
-      expect([401, 403], `${method} ${path} with ${needed}`).not.toContain(
-        allowed.status,
-      );
+      const only = await makeActor(app, { permissions: [def.needed] });
+      const [m2, p2, b2] = await def.make();
+      const allowed = await only.agent[m2](p2).send(b2);
+      expect(allowed.status, `${m2} ${p2} with ${def.needed}`).toBe(def.ok);
     }
   });
 
