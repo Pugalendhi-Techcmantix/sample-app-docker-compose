@@ -1,22 +1,28 @@
 import { useCallback, useEffect, useState } from 'react'
-import { createRole, deleteRole, listRoles, updateRole } from '../api.js'
+import { Pencil, Plus, Shield, Trash2 } from 'lucide-react'
+import { createRole, deleteRole, listPermissions, listRoles, updateRole } from '../api.js'
+import { useAuth } from '../auth/AuthContext.jsx'
+import Chips, { ChipsLegend } from '../components/Chips.jsx'
 import ConfirmDelete from '../components/ConfirmDelete.jsx'
 import ErrorBanner from '../components/ErrorBanner.jsx'
+import Field, { fieldAria, focusFirstError, mapFieldErrors } from '../components/Field.jsx'
+import Modal from '../components/Modal.jsx'
+import Skeleton from '../components/Skeleton.jsx'
+import { useToast } from '../components/Toast.jsx'
+import { EmptyState, PageHead } from '../components/ui.jsx'
 
-const EMPTY = { name: '', description: '' }
-
-function fieldErrors(err, conflictField) {
-  const out = {}
-  if (err.details?.length) for (const d of err.details) out[d.field] = d.message
-  else if (err.status === 409) out[conflictField] = err.message
-  return out
-}
+const groupLabel = (g) => g[0].toUpperCase() + g.slice(1)
 
 export default function RolesPage() {
+  const { can } = useAuth()
+  const toast = useToast()
+  const canManage = can('roles.manage')
   const [roles, setRoles] = useState(null)
+  const [permissions, setPermissions] = useState([])
   const [error, setError] = useState(null)
-  const [form, setForm] = useState(null) // null = closed; { id?, name, description }
+  const [form, setForm] = useState(null) // null = closed; { id?, name, description, permissions }
   const [errors, setErrors] = useState({})
+  const [formError, setFormError] = useState(null)
   const [saving, setSaving] = useState(false)
   const [toDelete, setToDelete] = useState(null)
 
@@ -34,30 +40,52 @@ export default function RolesPage() {
     load()
   }, [load])
 
+  // The permission list is only needed for the form.
+  useEffect(() => {
+    if (!canManage) return
+    listPermissions().then(setPermissions, setError)
+  }, [canManage])
+
   const openForm = (role) => {
     setErrors({})
-    setForm(role ? { id: role.id, name: role.name, description: role.description ?? '' } : { ...EMPTY })
+    setFormError(null)
+    setForm(
+      role
+        ? { id: role.id, name: role.name, description: role.description ?? '', permissions: [...(role.permissions ?? [])] }
+        : { name: '', description: '', permissions: [] },
+    )
   }
+  const closeForm = () => setForm(null)
+
+  const togglePermission = (key, on) =>
+    setForm((f) => ({ ...f, permissions: on ? [...f.permissions, key] : f.permissions.filter((p) => p !== key) }))
 
   const submit = async (e) => {
     e.preventDefault()
+    const formEl = e.currentTarget
     const name = form.name.trim()
-    if (!name) return setErrors({ name: 'Name is required' })
-    const data = { name, description: form.description.trim() || null }
+    setFormError(null)
+    if (!name) {
+      setErrors({ name: 'Name is required' })
+      return focusFirstError(formEl)
+    }
+    setErrors({})
+    const data = { name, description: form.description.trim() || null, permissions: form.permissions }
     setSaving(true)
     try {
       if (form.id) await updateRole(form.id, data)
       else await createRole(data)
-      setForm(null)
+      closeForm()
       setError(null)
+      toast(form.id ? 'Role updated' : 'Role created')
       await load()
     } catch (err) {
-      const fe = fieldErrors(err, 'name')
-      if (Object.keys(fe).length) setErrors(fe)
-      else {
-        setErrors({})
-        setError(err)
+      const fe = mapFieldErrors(err, /name/i.test(err.message) ? 'name' : undefined)
+      if (Object.keys(fe).length) {
+        setErrors(fe)
+        focusFirstError(formEl)
       }
+      else setFormError(err)
     } finally {
       setSaving(false)
     }
@@ -69,86 +97,115 @@ export default function RolesPage() {
     try {
       await deleteRole(role.id)
       setError(null)
+      toast('Role deleted')
       await load()
     } catch (err) {
       setError(err)
     }
   }
 
+  const groups = [...new Set(permissions.map((p) => p.group))]
+
   return (
     <section>
-      <div className="page-head">
-        <h1>Roles</h1>
-        <button type="button" className="btn btn-primary" onClick={() => openForm(null)}>Add role</button>
-      </div>
+      <PageHead title="Roles" description="A role is a set of permissions. Everyone who has the role gets them.">
+        {canManage && (
+          <button type="button" className="btn btn-primary" onClick={() => openForm(null)}>
+            <Plus size={16} aria-hidden="true" /> Add role
+          </button>
+        )}
+      </PageHead>
       <ErrorBanner error={error} onClose={() => setError(null)} />
 
-      {form && (
-        <form className="card form" onSubmit={submit} noValidate aria-label={form.id ? 'Edit role' : 'Add role'}>
-          <h2>{form.id ? 'Edit role' : 'Add role'}</h2>
-          <div className="field">
-            <label htmlFor="role-name">Name *</label>
-            <input
-              id="role-name"
-              value={form.name}
-              maxLength={50}
-              autoFocus
-              aria-invalid={!!errors.name}
-              aria-describedby={errors.name ? 'role-name-err' : undefined}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
-            {errors.name && <p id="role-name-err" className="field-error">{errors.name}</p>}
+      {roles === null ? (
+        <Skeleton />
+      ) : roles.length === 0 ? (
+        !error && (
+          <EmptyState icon={Shield} title="No roles yet."
+            action={canManage && (
+              <button type="button" className="btn btn-primary" onClick={() => openForm(null)}>Create the first role</button>
+            )}>
+            Create a role, choose what it may do, then give it to people on the Users page.
+          </EmptyState>
+        )
+      ) : (
+        <>
+          <div className="table-wrap">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th scope="col">Role</th><th scope="col">Permissions</th><th scope="col" className="cell-num">Users</th>
+                  {canManage && <th scope="col" className="th-actions"><span className="sr-only">Actions</span></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {roles.map((r) => (
+                  <tr key={r.id}>
+                    <td data-label="Role" className="cell-lead role-cell">
+                      <span className="cell-primary break">{r.name}</span>
+                      {r.description && <span className="cell-sub break">{r.description}</span>}
+                    </td>
+                    <td data-label="Permissions" className="chips-cell"><Chips items={r.permissions} empty="No permissions" /></td>
+                    <td data-label="Users" className="cell-num">{r.userCount ?? 0}</td>
+                    {canManage && (
+                      <td data-label="Actions" className="row-actions">
+                        <button type="button" className="btn btn-ghost btn-icon btn-sm" data-tip="Edit" onClick={() => openForm(r)} aria-label={`Edit ${r.name}`}>
+                          <Pencil size={16} aria-hidden="true" />
+                        </button>
+                        <button type="button" className="btn btn-ghost btn-icon btn-sm btn-danger-icon" data-tip="Delete" onClick={() => setToDelete(r)} aria-label={`Delete ${r.name}`}>
+                          <Trash2 size={16} aria-hidden="true" />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <div className="field">
-            <label htmlFor="role-desc">Description</label>
-            <textarea
-              id="role-desc"
-              rows={2}
-              maxLength={255}
-              value={form.description}
-              aria-invalid={!!errors.description}
-              aria-describedby={errors.description ? 'role-desc-err' : undefined}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-            />
-            {errors.description && <p id="role-desc-err" className="field-error">{errors.description}</p>}
-          </div>
-          <div className="actions">
-            <button type="button" className="btn" onClick={() => setForm(null)}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
-          </div>
-        </form>
+          <ChipsLegend />
+        </>
       )}
 
-      {roles === null ? (
-        <p role="status">Loading…</p>
-      ) : roles.length === 0 ? (
-        !error && <p className="empty">No roles yet.</p>
-      ) : (
-        <div className="table-wrap">
-          <table className="data">
-            <thead>
-              <tr><th>Name</th><th>Description</th><th>Actions</th></tr>
-            </thead>
-            <tbody>
-              {roles.map((r) => (
-                <tr key={r.id}>
-                  <td data-label="Name" className="break">{r.name}</td>
-                  <td data-label="Description" className="break">{r.description || '—'}</td>
-                  <td data-label="Actions" className="row-actions">
-                    <button type="button" className="btn" onClick={() => openForm(r)} aria-label={`Edit ${r.name}`}>Edit</button>
-                    <button type="button" className="btn btn-danger-outline" onClick={() => setToDelete(r)} aria-label={`Delete ${r.name}`}>Delete</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <Modal open={!!form} title={form?.id ? 'Edit role' : 'Add role'} titleId="role-form-title" onClose={closeForm} wide>
+        {form && (
+          <form onSubmit={submit} noValidate aria-labelledby="role-form-title">
+            <ErrorBanner error={formError} />
+            <Field id="role-name" label="Name *" error={errors.name}>
+              <input id="role-name" name="name" autoComplete="off" value={form.name} maxLength={50} autoFocus
+                {...fieldAria('role-name', errors.name)} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            </Field>
+            <Field id="role-desc" label="Description" error={errors.description}>
+              <textarea id="role-desc" name="description" rows={2} maxLength={255} value={form.description}
+                {...fieldAria('role-desc', errors.description)} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            </Field>
+            {groups.map((g) => (
+              <fieldset key={g} className="perm-group">
+                <legend>{groupLabel(g)} permissions</legend>
+                <div className="perm-grid">
+                  {permissions.filter((p) => p.group === g).map((p) => (
+                    <div key={p.key} className="check-tile">
+                      <input id={`perm-${p.key}`} type="checkbox" checked={form.permissions.includes(p.key)}
+                        onChange={(e) => togglePermission(p.key, e.target.checked)} />
+                      <label htmlFor={`perm-${p.key}`}>{p.label}</label>
+                      <span className="check-key" translate="no">{p.key}</span>
+                    </div>
+                  ))}
+                </div>
+              </fieldset>
+            ))}
+            {errors.permissions && <p className="field-error">{errors.permissions}</p>}
+            <div className="actions">
+              <button type="button" className="btn" onClick={closeForm}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+            </div>
+          </form>
+        )}
+      </Modal>
 
       <ConfirmDelete
         open={!!toDelete}
         title="Delete role?"
-        message={toDelete ? `Delete role "${toDelete.name}"? This cannot be undone.` : ''}
+        message={toDelete ? `Delete role “${toDelete.name}”? This cannot be undone.` : ''}
         onConfirm={confirmDelete}
         onCancel={() => setToDelete(null)}
       />

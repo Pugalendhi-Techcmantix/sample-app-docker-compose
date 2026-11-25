@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, createUser, deleteRole, http, listRoles } from './api.js'
+import { ApiError, createUser, deleteRole, http, listRoles, login, logout, me, setUnauthorizedHandler } from './api.js'
 import { mockApi, networkError } from './test-utils.js'
 
 const json = (status, body) => ({ status, json: body })
@@ -41,6 +41,35 @@ describe('api client', () => {
     await createUser({ fullName: 'A' })
     expect(JSON.parse(calls.mock.calls[0][1].body)).toEqual({ fullName: 'A' })
     expect(http.defaults.timeout).toBe(15000)
+  })
+})
+
+describe('auth handling', () => {
+  afterEach(() => setUnauthorizedHandler(null))
+
+  it('sends cookies with every request', () => {
+    expect(http.defaults.withCredentials).toBe(true)
+  })
+
+  it('calls the unauthorized handler on a 401, except for login/me/logout', async () => {
+    const handler = vi.fn()
+    setUnauthorizedHandler(handler)
+    mockApi(() => json(401, { error: { message: 'Not signed in' } }))
+    await listRoles().catch(() => {})
+    expect(handler).toHaveBeenCalledTimes(1)
+    await login({}).catch(() => {})
+    await me().catch(() => {})
+    await logout().catch(() => {})
+    expect(handler).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not call it for other statuses', async () => {
+    const handler = vi.fn()
+    setUnauthorizedHandler(handler)
+    mockApi(() => json(403, { error: { message: 'Forbidden' } }))
+    const err = await listRoles().catch((e) => e)
+    expect(err.status).toBe(403)
+    expect(handler).not.toHaveBeenCalled()
   })
 })
 

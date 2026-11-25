@@ -7,6 +7,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     server: { watch: watchOptions(), proxy: { '/api': env.API_PROXY_TARGET || 'http://localhost:4000' } },
-    test: { environment: 'jsdom', globals: true, env: { VITE_API_URL: '/api' } }, // independent of .env.local
+    // VITE_API_URL is pinned so tests ignore any .env.local
+    test: { environment: 'jsdom', globals: true, setupFiles: ['./src/test-setup.js'], env: { VITE_API_URL: '/api' } },
   }
 })

@@ -1,0 +1,53 @@
+/* Reset, element defaults, browser surfaces, utilities. */
+*, *::before, *::after { box-sizing: border-box; }
+html {
+  font-family: var(--font-sans);
+  color: var(--text);
+  background: var(--bg);
+  line-height: var(--leading);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  scrollbar-color: var(--border-strong) transparent;
+  accent-color: var(--primary);
+  caret-color: var(--primary);
+  scroll-padding-top: calc(var(--topbar-height) + var(--space-4));
+}
+body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); font-size: var(--text-md); }
+h1, h2, h3 { margin: 0; line-height: var(--leading-tight); text-wrap: balance; letter-spacing: var(--tracking-tight); }
+h1 { font-size: var(--text-xl); font-weight: var(--weight-semibold); }
+h2 { font-size: var(--text-base); font-weight: var(--weight-semibold); }
+p { margin: 0; text-wrap: pretty; }
+a { color: var(--primary); text-underline-offset: 0.2em; text-decoration-thickness: 1px; }
+a:hover { text-decoration-thickness: 2px; }
+button, input, select, textarea { font: inherit; color: inherit; }
+a, button, input, select, textarea, label, summary { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+svg { flex: none; }
+::selection { background: var(--selection); color: var(--text); }
+:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+:focus:not(:focus-visible) { outline: none; }
+
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.muted { color: var(--muted); }
+.empty { color: var(--muted); }
+.break { overflow-wrap: anywhere; word-break: break-word; }
+.num { font-variant-numeric: tabular-nums; }
+.skip-link {
+  position: fixed; top: var(--space-2); left: var(--space-2); z-index: 100;
+  padding: var(--space-2) var(--space-4); border-radius: var(--radius);
+  background: var(--primary); color: var(--primary-ink); font-weight: var(--weight-medium); text-decoration: none;
+  transform: translateY(-160%); transition: transform var(--transition);
+}
+.skip-link:focus-visible { transform: none; }
+main:focus { outline: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
