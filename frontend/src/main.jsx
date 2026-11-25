@@ -5,6 +5,7 @@ import App from './App.jsx'
 import { AuthProvider } from './auth/AuthContext.jsx'
 import { ToastProvider } from './components/Toast.jsx'
 import { applyTheme, getStoredTheme } from './theme.js'
+import '@fontsource-variable/instrument-sans/wght.css'
 import './styles/index.css'
 
 applyTheme(getStoredTheme())
