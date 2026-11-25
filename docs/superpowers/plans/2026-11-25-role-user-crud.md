@@ -66,7 +66,7 @@ e2e/smoke.spec.js  playwright.config.js   # root-level, runs against http://loca
 
 **Files:** Create `.gitignore`, `.env.example`, `docker-compose.yml` (db service only), `db/init/01-create-test-db.sql`
 
-**Interfaces — Produces:** env vars `POSTGRES_USER=root`, empty `POSTGRES_PASSWORD` with `POSTGRES_HOST_AUTH_METHOD=trust` (local only), `POSTGRES_DB=crud`, `DATABASE_URL=postgres://root@db:5432/crud`, `TEST_DATABASE_URL=postgres://root@localhost:5433/crud_test`.
+**Interfaces — Produces:** env vars `POSTGRES_USER=root`, `POSTGRES_PASSWORD=password`, `POSTGRES_DB=crud`, `DATABASE_URL=postgres://root:password@db:5432/crud`, `TEST_DATABASE_URL=postgres://root@localhost:5433/crud_test`.
 
 - [ ] **Step 1:** `git init`, then add a `.gitignore` covering `node_modules`, `.env`, `dist`, `coverage`, `test-results`, `playwright-report`.
 - [ ] **Step 2:** Add `.env.example` with the vars above. Copy it to `.env`.

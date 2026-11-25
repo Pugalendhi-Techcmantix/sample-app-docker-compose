@@ -141,14 +141,13 @@ Unset it to get the production-like setup again.
 
 | Variable | Used by | Default | Purpose |
 |---|---|---|---|
-| `DATABASE_URL` | backend, prisma CLI | none (required) | PostgreSQL connection string. Docker: `postgres://root@db:5432/crud` |
+| `DATABASE_URL` | backend, prisma CLI | none (required) | PostgreSQL connection string. Docker: `postgres://root:password@db:5432/crud` |
 | `PORT` | backend | `4000` | API listen port |
 | `CORS_ORIGINS` | backend | `http://localhost:5173,http://localhost:8080` | Comma-separated browser origins allowed to call the API |
 | `VITE_API_URL` | frontend (build time) | `/api` | API base URL the browser uses. Rebuild the frontend after changing it |
 | `API_PROXY_TARGET` | frontend dev server | `http://localhost:4000` | Target of the Vite `/api` proxy when `VITE_API_URL` is `/api` |
 | `DB_HOST_PORT` | docker compose | `5433` | Host port published for the db container |
-| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | db container | `root` / empty / `crud` | Database created on first start of the db container |
-| `POSTGRES_HOST_AUTH_METHOD` | db container | `trust` | Local-only: no password needed |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | db container | `root` / `password` / `crud` | Database created on first start of the db container |
 
 Real values live in git-ignored `.env` files (`.env` in the repo root for Docker, `backend/.env`
 for local runs, `frontend/.env*.local`). Commit only the `.env.example` files.
