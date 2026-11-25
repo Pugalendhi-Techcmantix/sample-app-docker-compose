@@ -7,10 +7,12 @@ FROM node:24-alpine
 WORKDIR /app
 ENV NODE_ENV=production PRISMA_DISABLE_TELEMETRY=1
 COPY --from=deps /app/node_modules ./node_modules
-COPY package.json prisma.config.ts docker-entrypoint.sh ./
+# Includes the prisma CLI, prisma.config.ts, contract, migrations and seed, so
+# `docker compose exec api npm run db:migrate` / `db:seed` work. Nothing runs automatically.
+COPY package.json prisma.config.ts ./
 COPY migrations ./migrations
 COPY prisma ./prisma
 COPY src ./src
 USER node
 EXPOSE 4000
-ENTRYPOINT ["sh", "docker-entrypoint.sh"]
+CMD ["node", "src/server.js"]
