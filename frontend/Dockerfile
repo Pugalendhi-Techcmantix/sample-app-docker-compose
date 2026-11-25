@@ -1,3 +1,12 @@
+# Development image: source is bind-mounted at runtime (see docker-compose.dev.yml).
+# Not the default target; build it with `--target dev`.
+FROM node:24-alpine AS dev
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+EXPOSE 5173
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
+
 FROM node:24-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
