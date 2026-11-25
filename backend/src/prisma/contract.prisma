@@ -6,6 +6,7 @@ model Role {
   description String(storage: varchar, length: 255)?
   createdAt   temporal.CreatedAt @map("created_at")
   updatedAt   temporal.UpdatedAt @map("updated_at")
+  permissions String[]           @default(sql`'{}'::text[]`)
   users       User[]
 
   @@index(expression: sql`lower(name)`, unique: true, name: "roles_name_lower_key")
@@ -18,6 +19,7 @@ model User {
   email     String(storage: varchar, length: 255) @unique
   roleId    Int                @map("role_id")
   role      Role               @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  passwordHash String(storage: varchar, length: 100)? @map("password_hash")
   isActive  Boolean            @default(true) @map("is_active")
   createdAt temporal.CreatedAt @map("created_at")
   updatedAt temporal.UpdatedAt @map("updated_at")

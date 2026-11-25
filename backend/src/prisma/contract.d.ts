@@ -18,7 +18,7 @@ import type {
 } from '@prisma/orm-postgres/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'b041b20aa553d3edbeba6f423a61ad24c365a42e5cb9d666472410c670a5226d'>;
+  StorageHashBase<'d9fb1df96b9432db96a06f1bbcabfb45503456bb0424be4122513b688a6e6938'>;
 export type ExecutionHash =
   ExecutionHashBase<'2e9b93c971e04f2408d905cf67de58f8bdb6c20195e472d431ef5aad47a7d474'>;
 export type ProfileHash =
@@ -309,6 +309,7 @@ export namespace Models {
     description: FieldOutputTypes['public']['Role']['description'];
     id: FieldOutputTypes['public']['Role']['id'];
     name: FieldOutputTypes['public']['Role']['name'];
+    permissions: FieldOutputTypes['public']['Role']['permissions'];
     updatedAt: FieldOutputTypes['public']['Role']['updatedAt'];
     users: public_User[];
     readonly [RelationKeys]?: 'users';
@@ -319,6 +320,7 @@ export namespace Models {
     fullName: FieldOutputTypes['public']['User']['fullName'];
     id: FieldOutputTypes['public']['User']['id'];
     isActive: FieldOutputTypes['public']['User']['isActive'];
+    passwordHash: FieldOutputTypes['public']['User']['passwordHash'];
     roleId: FieldOutputTypes['public']['User']['roleId'];
     updatedAt: FieldOutputTypes['public']['User']['updatedAt'];
     role: public_Role;
@@ -384,6 +386,16 @@ type ContractBase = Omit<
                   readonly typeParams: { readonly length: 50 };
                   readonly many: false;
                 };
+                readonly permissions: {
+                  readonly dataType: 'pg/text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'function';
+                    readonly expression: "'{}'::text[]";
+                  };
+                  readonly many: { readonly elementNullable: false };
+                };
                 readonly updated_at: {
                   readonly dataType: 'pg/timestamptz';
                   readonly codecId: 'pg/timestamptz-date@1';
@@ -445,6 +457,13 @@ type ContractBase = Omit<
                     readonly kind: 'literal';
                     readonly value: DefaultLiteralValue<'pg/bool@1', true>;
                   };
+                  readonly many: false;
+                };
+                readonly password_hash: {
+                  readonly dataType: 'pg/varchar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: true;
+                  readonly typeParams: { readonly length: 100 };
                   readonly many: false;
                 };
                 readonly role_id: {
@@ -534,6 +553,11 @@ type ContractBase = Omit<
                   readonly typeParams: { readonly length: 50 };
                 };
               };
+              readonly permissions: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+                readonly many: { readonly elementNullable: false };
+              };
               readonly updatedAt: {
                 readonly nullable: false;
                 readonly type: {
@@ -561,6 +585,7 @@ type ContractBase = Omit<
                 readonly description: { readonly column: 'description' };
                 readonly id: { readonly column: 'id' };
                 readonly name: { readonly column: 'name' };
+                readonly permissions: { readonly column: 'permissions' };
                 readonly updatedAt: { readonly column: 'updated_at' };
               };
             };
@@ -599,6 +624,14 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
               };
+              readonly passwordHash: {
+                readonly nullable: true;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 100 };
+                };
+              };
               readonly roleId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
@@ -632,6 +665,7 @@ type ContractBase = Omit<
                 readonly fullName: { readonly column: 'full_name' };
                 readonly id: { readonly column: 'id' };
                 readonly isActive: { readonly column: 'is_active' };
+                readonly passwordHash: { readonly column: 'password_hash' };
                 readonly roleId: { readonly column: 'role_id' };
                 readonly updatedAt: { readonly column: 'updated_at' };
               };

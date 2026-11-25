@@ -1,0 +1,179 @@
+[
+  {
+    "id": "column.public.roles.permissions",
+    "label": "Add column \"permissions\" to \"roles\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "permissions",
+        "table": "roles"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"permissions\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "roles",
+          "permissions"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "column \"permissions\" on \"roles\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"permissions\"",
+        "sql": "ALTER TABLE \"public\".\"roles\" ADD COLUMN \"permissions\" text[] DEFAULT ('{}'::text[]) NOT NULL"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"permissions\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "roles",
+          "permissions"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "column \"permissions\" on \"roles\""
+        }
+      },
+      {
+        "description": "verify column \"permissions\" has type \"text[]\"",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_attribute\" AS \"a\" INNER JOIN \"pg_class\" AS \"c\" ON \"c\".\"oid\" = \"a\".\"attrelid\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"relnamespace\" WHERE (\"n\".\"nspname\" = $1 AND \"c\".\"relname\" = $2 AND \"a\".\"attname\" = $3 AND (format_type(\"a\".\"atttypid\", \"a\".\"atttypmod\")) = $4 AND NOT (\"a\".\"attisdropped\"))) AS \"result\"",
+        "params": [
+          "public",
+          "roles",
+          "permissions",
+          "text[]"
+        ]
+      },
+      {
+        "description": "verify column \"permissions\" is NOT NULL",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3 AND \"is_nullable\" = $4)) AS \"result\"",
+        "params": [
+          "public",
+          "roles",
+          "permissions",
+          "NO"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "column.public.users.password_hash",
+    "label": "Add column \"password_hash\" to \"users\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "password_hash",
+        "table": "users"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"password_hash\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "users",
+          "password_hash"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "column \"password_hash\" on \"users\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"password_hash\"",
+        "sql": "ALTER TABLE \"public\".\"users\" ADD COLUMN \"password_hash\" character varying(100)"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"password_hash\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "users",
+          "password_hash"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "column \"password_hash\" on \"users\""
+        }
+      },
+      {
+        "description": "verify column \"password_hash\" has type \"character varying(100)\"",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_attribute\" AS \"a\" INNER JOIN \"pg_class\" AS \"c\" ON \"c\".\"oid\" = \"a\".\"attrelid\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"relnamespace\" WHERE (\"n\".\"nspname\" = $1 AND \"c\".\"relname\" = $2 AND \"a\".\"attname\" = $3 AND (format_type(\"a\".\"atttypid\", \"a\".\"atttypmod\")) = $4 AND NOT (\"a\".\"attisdropped\"))) AS \"result\"",
+        "params": [
+          "public",
+          "users",
+          "password_hash",
+          "character varying(100)"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "checkConstraint.roles.roles_permissions_elem_not_null_318e2952",
+    "label": "Add check constraint \"roles_permissions_elem_not_null_318e2952\" on \"roles\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "checkConstraint",
+        "name": "roles_permissions_elem_not_null_318e2952",
+        "table": "roles"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"roles_permissions_elem_not_null_318e2952\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "roles_permissions_elem_not_null_318e2952",
+          "public",
+          "\"public\".\"roles\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "constraint \"roles_permissions_elem_not_null_318e2952\" on \"roles\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add check constraint \"roles_permissions_elem_not_null_318e2952\"",
+        "sql": "ALTER TABLE \"public\".\"roles\" ADD CONSTRAINT \"roles_permissions_elem_not_null_318e2952\" CHECK (array_position(\"permissions\", NULL) IS NULL)"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify check constraint \"roles_permissions_elem_not_null_318e2952\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4)) AS \"result\"",
+        "params": [
+          "roles_permissions_elem_not_null_318e2952",
+          "public",
+          "\"public\".\"roles\"",
+          "c"
+        ]
+      }
+    ]
+  }
+]

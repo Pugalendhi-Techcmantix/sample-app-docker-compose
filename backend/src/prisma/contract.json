@@ -56,6 +56,16 @@
                   }
                 }
               },
+              "permissions": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
               "updatedAt": {
                 "nullable": false,
                 "type": {
@@ -97,6 +107,9 @@
                 },
                 "name": {
                   "column": "name"
+                },
+                "permissions": {
+                  "column": "permissions"
                 },
                 "updatedAt": {
                   "column": "updated_at"
@@ -152,6 +165,16 @@
                   "kind": "scalar"
                 }
               },
+              "passwordHash": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sql/varchar@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 100
+                  }
+                }
+              },
               "roleId": {
                 "nullable": false,
                 "type": {
@@ -205,6 +228,9 @@
                 "isActive": {
                   "column": "is_active"
                 },
+                "passwordHash": {
+                  "column": "password_hash"
+                },
                 "roleId": {
                   "column": "role_id"
                 },
@@ -226,6 +252,13 @@
         "entries": {
           "table": {
             "roles": {
+              "checks": [
+                {
+                  "expression": "array_position(\"permissions\", NULL) IS NULL",
+                  "name": "roles_permissions_elem_not_null_318e2952",
+                  "prefix": "roles_permissions_elem_not_null"
+                }
+              ],
               "columns": {
                 "created_at": {
                   "codecId": "pg/timestamptz-date@1",
@@ -259,6 +292,18 @@
                   "typeParams": {
                     "length": 50
                   }
+                },
+                "permissions": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "default": {
+                    "expression": "'{}'::text[]",
+                    "kind": "function"
+                  },
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": false
                 },
                 "updated_at": {
                   "codecId": "pg/timestamptz-date@1",
@@ -329,6 +374,14 @@
                   },
                   "nullable": false
                 },
+                "password_hash": {
+                  "codecId": "sql/varchar@1",
+                  "dataType": "pg/varchar",
+                  "nullable": true,
+                  "typeParams": {
+                    "length": 100
+                  }
+                },
                 "role_id": {
                   "codecId": "pg/int4@1",
                   "dataType": "pg/int4",
@@ -394,7 +447,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "b041b20aa553d3edbeba6f423a61ad24c365a42e5cb9d666472410c670a5226d"
+    "storageHash": "d9fb1df96b9432db96a06f1bbcabfb45503456bb0424be4122513b688a6e6938"
   },
   "execution": {
     "executionHash": "2e9b93c971e04f2408d905cf67de58f8bdb6c20195e472d431ef5aad47a7d474",
