@@ -19,7 +19,7 @@ createdb crud
 cd backend
 npm install
 # create backend/.env (git-ignored) with at least:
-#   DATABASE_URL=postgres://USER:PASSWORD@localhost:5433/crud
+#   DATABASE_URL=postgres://USER:PASSWORD@localhost:5434/crud
 #   PORT=4000                       # optional
 npm run db:migrate                  # creates the tables
 npm run db:seed                     # adds roles Admin, Manager, Staff (safe to repeat)
@@ -211,7 +211,7 @@ API summary: `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`
 
 | Variable | Used by | Default | Purpose |
 |---|---|---|---|
-| `DATABASE_URL` | backend, prisma CLI | none (required) | PostgreSQL connection string. Docker: `postgres://postgres:password@db:5432/crud`; local backend: `postgres://postgres:password@localhost:5433/crud` (the Docker db) |
+| `DATABASE_URL` | backend, prisma CLI | none (required) | PostgreSQL connection string. Docker: `postgres://postgres:password@db:5432/crud`; local backend: `postgres://postgres:password@localhost:5434/crud` (the Docker db) |
 | `PORT` | backend | `4000` | API listen port |
 | `CORS_ORIGINS` | backend | `http://localhost:5173,http://localhost:8080` | Comma-separated browser origins allowed to call the API |
 | `TRUST_PROXY` | backend | `0` | Reverse-proxy hops whose `X-Forwarded-For` is trusted (Docker production: `1`, dev: `0`) |
@@ -222,7 +222,7 @@ API summary: `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`
 | `LOGIN_RATE_LIMIT_DISABLED` | backend | `false` | `true` turns the login rate limit off |
 | `VITE_API_URL` | frontend (build time) | `/api` | API base URL the browser uses. Rebuild the frontend after changing it |
 | `API_PROXY_TARGET` | frontend dev server | `http://localhost:4000` | Target of the Vite `/api` proxy when `VITE_API_URL` is `/api` |
-| `DB_HOST_PORT` | docker compose | `5433` | Host port of the Docker db, for the local backend and PC tools such as pgAdmin (`localhost:5433`). Containers use `db:5432`. |
+| `DB_HOST_PORT` | docker compose | `5434` | Host port of the Docker db, for the local backend and PC tools such as pgAdmin (`localhost:5434`). Containers use `db:5432`. |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | db container | `postgres` / `password` / `crud` | Database created on first start of the db container |
 
 Real values live in git-ignored `.env` files (`.env` in the repo root for Docker, `backend/.env`
