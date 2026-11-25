@@ -1,11 +1,35 @@
-node_modules
-.env
-dist
-coverage
-test-results
-playwright-report
-.superpowers
-.playwright-mcp
+# Dependencies
+node_modules/
 
-# designer screenshots and throwaway scripts
-.design-shots
+# Build output
+dist/
+build/
+coverage/
+
+# Secrets and local settings (real values live only on your machine)
+.env
+.env.*
+!.env.example
+!.env.development
+
+# Test and tool output
+test-results/
+playwright-report/
+*.log
+pw.out
+
+# AI/agent working files and synced skills
+.superpowers/
+.playwright-mcp/
+.design-shots/
+.claude/
+.agents/
+.cursor/
+.devin/
+
+# Editors and OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
